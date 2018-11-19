@@ -3,6 +3,8 @@ module NewTopBar.Styles exposing (..)
 import Css exposing (..)
 import ScreenSize exposing (ScreenSize(..))
 import SearchBar exposing (SearchBar(..))
+import Http
+import Html
 
 
 pageHeaderHeight : Float
@@ -20,6 +22,11 @@ topBar =
     , justifyContent spaceBetween
     , backgroundColor <| hex "1e1d1d"
     ]
+
+
+topBarCSS : List ( String, String )
+topBarCSS =
+    [ ( "position", "fixed" ), ( "top", "0" ), ( "width", "100%" ), ( "z-index", "999" ), ( "display", "flex" ), ( "justify-content", "space-between" ), ( "background-color", "#1e1d1d" ) ]
 
 
 concourseLogo : List Style
@@ -231,3 +238,32 @@ logoutButton =
     , hover [ backgroundColor (hex "2a2929") ]
     ]
         ++ menuItem
+
+
+concourseLogoCSS : List ( String, String )
+concourseLogoCSS =
+    [ ( "background-image", "url(/public/images/concourse_logo_white.svg)" )
+    , ( "background-position", "50% 50%" )
+    , ( "background-repeat", "no-repeat" )
+    , ( "background-size", "42px 42px" )
+    , ( "width", "54px" )
+    , ( "height", "54px" )
+    ]
+
+
+breadcrumbComponentCSS : String -> List ( String, String )
+breadcrumbComponentCSS componentType =
+    [ ( "background-image", "url(/public/images/ic_breadcrumb_" ++ componentType ++ ".svg)" )
+    , ( "background-repeat", "no-repeat" )
+    , ( "background-size", "contain" )
+    , ( "display", "inline-block" )
+    , ( "vertical-align", "middle" )
+    , ( "height", "16px" )
+    , ( "width", "32px" )
+    , ( "margin-right", "10px" )
+    ]
+
+
+breadcrumbContainerCSS : List ( String, String )
+breadcrumbContainerCSS =
+    [ ( "display", "inline-block" ), ( "vertical-align", "middle" ), ( "font-size", "18px" ), ( "padding", "0 10px" ), ( "line-height", "54px" ) ]
