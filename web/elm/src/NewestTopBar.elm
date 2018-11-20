@@ -26,6 +26,7 @@ import Html.Styled.Attributes as HA
         , type_
         , value
         , style
+        , attribute
         )
 import Html.Styled.Events exposing (..)
 import Http
@@ -49,7 +50,7 @@ import Window
 
 type alias Model =
     { userState : UserState
-    , userMenuVisible : Bool
+    , isUserMenuExpanded : Bool
     , searchBar : SearchBar
     , teams : RemoteData.WebData (List Concourse.Team)
     , route : Routes.ConcourseRoute
@@ -108,7 +109,7 @@ init route =
                 Invisible
     in
         ( { userState = UserStateUnknown
-          , userMenuVisible = False
+          , isUserMenuExpanded = False
           , searchBar = searchBar
           , teams = RemoteData.Loading
           , route = route
@@ -193,7 +194,7 @@ update msg model =
             in
                 ( { model
                     | userState = UserStateLoggedOut
-                    , userMenuVisible = False
+                    , isUserMenuExpanded = False
                     , teams = RemoteData.Loading
                   }
                 , Navigation.newUrl redirectUrl
@@ -204,7 +205,7 @@ update msg model =
                 ( model, Cmd.none )
 
         ToggleUserMenu ->
-            ( { model | userMenuVisible = not model.userMenuVisible }, Cmd.none )
+            ( { model | isUserMenuExpanded = not model.isUserMenuExpanded }, Cmd.none )
 
         TeamsFetched response ->
             ( { model | teams = response }, Cmd.none )
@@ -364,45 +365,6 @@ showSearchInput model =
                 ( model, Cmd.none )
 
 
-viewUserState : { a | userState : UserState, userMenuVisible : Bool } -> List (Html Msg)
-viewUserState { userState, userMenuVisible } =
-    case userState of
-        UserStateUnknown ->
-            []
-
-        UserStateLoggedOut ->
-            [ Html.div
-                [ href "/sky/login"
-                , HA.attribute "aria-label" "Log In"
-                , id "login-button"
-                , onClick LogIn
-                , css Styles.menuButton
-                ]
-                [ Html.div [] [ Html.text "login" ] ]
-            ]
-
-        UserStateLoggedIn user ->
-            [ Html.div
-                [ id "user-id"
-                , onClick ToggleUserMenu
-                , css Styles.menuButton
-                ]
-                [ Html.div [ css Styles.userName ] [ Html.text (userDisplayName user) ] ]
-            ]
-                ++ (if userMenuVisible then
-                        [ Html.div
-                            [ HA.attribute "aria-label" "Log Out"
-                            , onClick LogOut
-                            , css Styles.logoutButton
-                            , id "logout-button"
-                            ]
-                            [ Html.div [] [ Html.text "logout" ] ]
-                        ]
-                    else
-                        []
-                   )
-
-
 searchInput : { a | query : String, screenSize : ScreenSize } -> List (Html Msg)
 searchInput { query, screenSize } =
     [ Html.div [ css Styles.searchForm ] <|
@@ -452,6 +414,55 @@ view model =
                             []
                     )
                )
+            ++ viewSearch
+            ++ viewLogin model
+
+
+viewLogin : Model -> List (Html Msg)
+viewLogin model =
+    [ Html.div [ id "login-component" ] <| viewLoginState model ]
+
+
+viewLoginState : { a | userState : UserState, isUserMenuExpanded : Bool } -> List (Html Msg)
+viewLoginState { userState, isUserMenuExpanded } =
+    case userState of
+        UserStateUnknown ->
+            []
+
+        UserStateLoggedOut ->
+            [ Html.div
+                [ href "/sky/login"
+                , HA.attribute "aria-label" "Log In"
+                , id "login-container"
+                , onClick LogIn
+                , style Styles.loginContainerCSS
+                ]
+                [ Html.div [ style Styles.loginItemCSS, id "login-item" ] [ Html.a [ href "/sky/login" ] [ Html.text "login" ] ] ]
+            ]
+
+        UserStateLoggedIn user ->
+            [ Html.div
+                [ id "login-container"
+                , onClick ToggleUserMenu
+                , style Styles.loginContainerCSS
+                ]
+                [ Html.div []
+                    [ Html.div [ id "login-item", style Styles.loginItemCSS ]
+                        [ Html.text (userDisplayName user)
+                        , (if isUserMenuExpanded then
+                            Html.div [ id "logout-button", style Styles.logoutButtonCSS, onClick LogOut ] [ Html.text "logout" ]
+                           else
+                            Html.div [ id "login-menu" ] []
+                          )
+                        ]
+                    ]
+                ]
+            ]
+
+
+viewSearch : List (Html Msg)
+viewSearch =
+    [ Html.input [ id "search-bar", style Styles.searchInputCSS ] [] ]
 
 
 viewConcourseLogo : List (Html Msg)
@@ -574,21 +585,6 @@ viewAutocomplete r =
                             ]
                             [ Html.text option ]
                 )
-
-
-viewUserInfo : Model -> List (Html Msg)
-viewUserInfo model =
-    case model.searchBar of
-        Expanded r ->
-            case r.screenSize of
-                Mobile ->
-                    []
-
-                Desktop ->
-                    [ Html.div [ css Styles.userInfo ] (viewUserState model) ]
-
-        _ ->
-            [ Html.div [ css Styles.userInfo ] (viewUserState model) ]
 
 
 fetchUser : Cmd Msg

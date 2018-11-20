@@ -26,7 +26,7 @@ topBar =
 
 topBarCSS : List ( String, String )
 topBarCSS =
-    [ ( "position", "fixed" ), ( "top", "0" ), ( "width", "100%" ), ( "z-index", "999" ), ( "display", "flex" ), ( "justify-content", "space-between" ), ( "background-color", "#1e1d1d" ) ]
+    [ ( "position", "fixed" ), ( "top", "0" ), ( "width", "100%" ), ( "z-index", "999" ), ( "display", "flex" ), ( "justify-content", "space-between" ), ( "background-color", "#1e1d1d" ), ( "height", "56px" ), ( "align-items", "center" ) ]
 
 
 concourseLogo : List Style
@@ -106,6 +106,22 @@ searchInput screenSize =
             ]
         ]
             ++ widthStyles
+
+
+searchInputCSS : List ( String, String )
+searchInputCSS =
+    [ ( "background-color", "transparent" )
+    , ( "background-image", "url('public/images/ic_search_white_24px.svg')" )
+    , ( "background-repeat", "no-repeat" )
+    , ( "background-position", "12px 8px" )
+    , ( "width", "220px" )
+    , ( "height", "30px" )
+    , ( "padding", "0 42px" )
+    , ( "border", "1px solid #504b4b" )
+    , ( "color", "#fff" )
+    , ( "font-size", "1.15em" )
+    , ( "font-family", "Inconsolata, monospace" )
+    ]
 
 
 searchClearButton : Bool -> List Style
@@ -240,6 +256,22 @@ logoutButton =
         ++ menuItem
 
 
+logoutButtonCSS : List ( String, String )
+logoutButtonCSS =
+    [ ( "position", "absolute" )
+    , ( "top", "55px" )
+    , ( "background-color", "#1e1d1d" )
+    , ( "height", "54px" )
+    , ( "width", "100%" )
+    , ( "border-top", "1px solid #3d3c3c" )
+    , ( "cursor", "pointer" )
+    , ( "display", "flex" )
+    , ( "align-items", "center" )
+    , ( "justify-content", "center" )
+    , ( "flex-grow", "1" )
+    ]
+
+
 concourseLogoCSS : List ( String, String )
 concourseLogoCSS =
     [ ( "background-image", "url(/public/images/concourse_logo_white.svg)" )
@@ -266,4 +298,30 @@ breadcrumbComponentCSS componentType =
 
 breadcrumbContainerCSS : List ( String, String )
 breadcrumbContainerCSS =
-    [ ( "display", "inline-block" ), ( "vertical-align", "middle" ), ( "font-size", "18px" ), ( "padding", "0 10px" ), ( "line-height", "54px" ) ]
+    [ ( "display", "inline-block" )
+    , ( "vertical-align", "middle" )
+    , ( "font-size", "18px" )
+    , ( "padding", "0 10px" )
+    , ( "line-height", "54px" )
+    ]
+
+
+loginContainerCSS : List ( String, String )
+loginContainerCSS =
+    [ ( "position", "relative" )
+    , ( "display", "flex" )
+    , ( "flex-direction", "column" )
+    , ( "border-left", "1px solid #3d3c3c" )
+    , ( "line-height", "56px" )
+    ]
+
+
+loginItemCSS : List ( String, String )
+loginItemCSS =
+    [ ( "padding", "0 30px" )
+    , ( "cursor", "pointer" )
+    , ( "display", "flex" )
+    , ( "align-items", "center" )
+    , ( "justify-content", "center" )
+    , ( "flex-grow", "1" )
+    ]
