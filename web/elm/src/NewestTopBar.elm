@@ -227,21 +227,29 @@ update msg model =
                 newModel =
                     case model.searchBar of
                         Expanded r ->
-                            case r.screenSize of
-                                Mobile ->
-                                    if String.isEmpty r.query then
-                                        { model | searchBar = Collapsed }
-                                    else
-                                        { model | searchBar = Expanded { r | showAutocomplete = False, selectionMade = False, selection = 0 } }
-
-                                Desktop ->
-                                    { model | searchBar = Expanded { r | showAutocomplete = False, selectionMade = False, selection = 0 } }
+                            { model | searchBar = Expanded { r | showAutocomplete = False } }
 
                         _ ->
                             model
             in
                 ( newModel, Cmd.none )
 
+        -- let
+        --     newModel =
+        --         case model.searchBar of
+        --             Expanded r ->
+        --                 case r.screenSize of
+        --                     Mobile ->
+        --                         if String.isEmpty r.query then
+        --                             { model | searchBar = Collapsed }
+        --                         else
+        --                             { model | searchBar = Expanded { r | showAutocomplete = False, selectionMade = False, selection = 0 } }
+        --                     Desktop ->
+        --                         { model | searchBar = Expanded { r | showAutocomplete = False, selectionMade = False, selection = 0 } }
+        --             _ ->
+        --                 model
+        -- in
+        --     ( newModel, Cmd.none )
         SelectMsg index ->
             let
                 newModel =
@@ -415,7 +423,21 @@ view model =
                     )
                )
             ++ viewSearch
+                { showAutocomplete = showAutocomplete model
+                , active = String.length (query model) > 0
+                , query = query model
+                }
             ++ viewLogin model
+
+
+showAutocomplete : Model -> Bool
+showAutocomplete model =
+    case model.searchBar of
+        Expanded r ->
+            r.showAutocomplete
+
+        _ ->
+            False
 
 
 viewLogin : Model -> List (Html Msg)
@@ -460,9 +482,57 @@ viewLoginState { userState, isUserMenuExpanded } =
             ]
 
 
-viewSearch : List (Html Msg)
-viewSearch =
-    [ Html.input [ id "search-bar", style Styles.searchInputCSS ] [] ]
+viewSearch : { a | showAutocomplete : Bool, active : Bool, query : String } -> List (Html Msg)
+viewSearch { showAutocomplete, active, query } =
+    let
+        dropdownItem : String -> Html Msg
+        dropdownItem text =
+            Html.li
+                [ onClick (FilterMsg text)
+                , style
+                    [ ( "width", "220px" )
+                    , ( "padding", "0 42px" )
+                    , ( "background-color", "#2e2e2e" )
+                    , ( "line-height", "30px" )
+                    , ( "list-style-type", "none" )
+                    , ( "border", "1px solid #504b4b" )
+                    , ( "margin-top", "-1px" )
+                    , ( "color", "#9b9b9b" )
+                    , ( "font-size", "1.15em" )
+                    ]
+                ]
+                [ Html.text text ]
+    in
+        [ Html.div [ id "search-container", style Styles.searchContainerCSS ]
+            ([ Html.input
+                [ id "search-bar"
+                , style Styles.searchInputCSS
+                , placeholder "search"
+                , value query
+                , onFocus FocusMsg
+                , onBlur BlurMsg
+                ]
+                []
+             , Html.div [ id "search-clear", onClick (FilterMsg ""), style (Styles.searchClearButtonCSS active) ] []
+             ]
+                ++ (if showAutocomplete then
+                        [ Html.ul
+                            [ id "search-dropdown"
+                            , style
+                                [ ( "position", "absolute" )
+                                , ( "top", "100%" )
+                                , ( "margin-top", "0" )
+                                ]
+                            ]
+                            [ dropdownItem "status:"
+                            , dropdownItem "team:"
+                            ]
+                        ]
+                    else
+                        []
+                   )
+            )
+        ]
 
 
 viewConcourseLogo : List (Html Msg)
@@ -550,11 +620,6 @@ viewMiddleSection model =
                        )
                 )
             ]
-
-
-viewBreadcrumbs : Model -> List (Html Msg)
-viewBreadcrumbs model =
-    [ Html.div [] [] ]
 
 
 viewAutocomplete :

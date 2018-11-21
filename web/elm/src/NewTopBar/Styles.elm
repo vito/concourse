@@ -79,6 +79,15 @@ searchForm =
     ]
 
 
+searchContainerCSS : List ( String, String )
+searchContainerCSS =
+    [ ( "position", "relative" )
+    , ( "display", "flex" )
+    , ( "flex-direction", "column" )
+    , ( "align-items", "stretch" )
+    ]
+
+
 searchInput : ScreenSize -> List Style
 searchInput screenSize =
     let
@@ -121,6 +130,7 @@ searchInputCSS =
     , ( "color", "#fff" )
     , ( "font-size", "1.15em" )
     , ( "font-family", "Inconsolata, monospace" )
+    , ( "outline", "0" )
     ]
 
 
@@ -144,6 +154,28 @@ searchClearButton active =
         , right zero
         , padding <| px 17
         , opacity <| num opacityValue
+        ]
+
+
+searchClearButtonCSS : Bool -> List ( String, String )
+searchClearButtonCSS active =
+    let
+        opacityValue =
+            if active then
+                "1"
+            else
+                "0.2"
+    in
+        [ ( "background-image", "url('public/images/ic_close_white_24px.svg')" )
+        , ( "background-repeat", "no-repeat" )
+        , ( "background-position", "10px 10px" )
+        , ( "border", "0" )
+        , ( "cursor", "pointer" )
+        , ( "color", "#504b4b" )
+        , ( "position", "absolute" )
+        , ( "right", "0" )
+        , ( "padding", "17px" )
+        , ( "opacity", opacityValue )
         ]
 
 
