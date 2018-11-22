@@ -4,7 +4,9 @@ import Concourse
 import Dashboard exposing (..)
 import Html.Attributes as Attr
 import Html.Styled as HS
+import QueryString
 import RemoteData
+import Routes
 import Test exposing (..)
 import Test.Html.Query as Query
 import Test.Html.Selector exposing (attribute, class, tag)
@@ -63,30 +65,31 @@ all =
                                   )
                                 )
                 in
-                Dashboard.init
-                    { title = always Cmd.none
-                    }
-                    { csrfToken = ""
-                    , turbulencePath = ""
-                    , search = ""
-                    , highDensity = False
-                    }
-                    |> Tuple.first
-                    |> update msg
-                    |> Tuple.first
-                    |> view
-                    |> HS.toUnstyled
-                    |> Query.fromHtml
-                    |> Query.find
-                        [ class "dashboard-team-group"
-                        , attribute <| Attr.attribute "data-team-name" "team"
-                        ]
-                    |> Query.find
-                        [ class "node"
-                        , attribute <| Attr.attribute "data-tooltip" "job"
-                        ]
-                    |> Query.find
-                        [ tag "a" ]
-                    |> Query.has
-                        [ attribute <| Attr.href "/teams/team/pipelines/pipeline/jobs/job/builds/1" ]
+                    Dashboard.init
+                        { title = always Cmd.none
+                        }
+                        { csrfToken = ""
+                        , turbulencePath = ""
+                        , search = ""
+                        , highDensity = False
+                        , route = { logical = Routes.Dashboard, queries = QueryString.empty, page = Nothing, hash = "" }
+                        }
+                        |> Tuple.first
+                        |> update msg
+                        |> Tuple.first
+                        |> view
+                        |> HS.toUnstyled
+                        |> Query.fromHtml
+                        |> Query.find
+                            [ class "dashboard-team-group"
+                            , attribute <| Attr.attribute "data-team-name" "team"
+                            ]
+                        |> Query.find
+                            [ class "node"
+                            , attribute <| Attr.attribute "data-tooltip" "job"
+                            ]
+                        |> Query.find
+                            [ tag "a" ]
+                        |> Query.has
+                            [ attribute <| Attr.href "/teams/team/pipelines/pipeline/jobs/job/builds/1" ]
         ]

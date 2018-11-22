@@ -25,7 +25,7 @@ import Monocle.Common exposing ((=>), (<|>))
 import Monocle.Optional
 import Monocle.Lens
 import MonocleHelpers exposing (..)
-import NewTopBar
+import NewestTopBar as NewTopBar
 import NewTopBar.Styles as NTBS
 import NoPipeline exposing (Msg, view)
 import Regex exposing (HowMany(All), regex, replace)
@@ -67,6 +67,7 @@ type alias Flags =
     , turbulencePath : String
     , search : String
     , highDensity : Bool
+    , route : Routes.ConcourseRoute
     }
 
 
@@ -113,7 +114,7 @@ init : Ports -> Flags -> ( Model, Cmd Msg )
 init ports flags =
     let
         ( topBar, topBarMsg ) =
-            NewTopBar.init (not flags.highDensity) flags.search
+            NewTopBar.init flags.route
     in
         ( { state = Err NotAsked
           , topBar = topBar

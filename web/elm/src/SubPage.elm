@@ -145,6 +145,7 @@ init flags route =
                     , csrfToken = flags.csrfToken
                     , search = querySearchForRoute route
                     , highDensity = False
+                    , route = route
                     }
 
         Routes.DashboardHd ->
@@ -155,6 +156,7 @@ init flags route =
                     , csrfToken = flags.csrfToken
                     , search = querySearchForRoute route
                     , highDensity = True
+                    , route = route
                     }
 
 

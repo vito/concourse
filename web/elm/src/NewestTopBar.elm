@@ -159,7 +159,7 @@ update msg model =
             in
                 ( newModel
                 , Cmd.batch
-                    [ Task.attempt (always Noop) (Dom.focus "search-input-field")
+                    [ Task.attempt (always Noop) (Dom.focus "search-bar")
                     , Navigation.modifyUrl (queryStringFromSearch query)
                     ]
                 )
@@ -227,7 +227,14 @@ update msg model =
                 newModel =
                     case model.searchBar of
                         Expanded r ->
-                            { model | searchBar = Expanded { r | showAutocomplete = False } }
+                            { model
+                                | searchBar =
+                                    Expanded
+                                        { r
+                                            | showAutocomplete =
+                                                query model == "status:"
+                                        }
+                            }
 
                         _ ->
                             model
@@ -488,7 +495,7 @@ viewSearch { showAutocomplete, active, query } =
         dropdownItem : String -> Html Msg
         dropdownItem text =
             Html.li
-                [ onClick (FilterMsg text)
+                [ onMouseDown (FilterMsg text)
                 , style
                     [ ( "width", "220px" )
                     , ( "padding", "0 42px" )
@@ -499,6 +506,7 @@ viewSearch { showAutocomplete, active, query } =
                     , ( "margin-top", "-1px" )
                     , ( "color", "#9b9b9b" )
                     , ( "font-size", "1.15em" )
+                    , ( "cursor", "pointer" )
                     ]
                 ]
                 [ Html.text text ]
@@ -511,6 +519,7 @@ viewSearch { showAutocomplete, active, query } =
                 , value query
                 , onFocus FocusMsg
                 , onBlur BlurMsg
+                , onInput FilterMsg
                 ]
                 []
              , Html.div [ id "search-clear", onClick (FilterMsg ""), style (Styles.searchClearButtonCSS active) ] []
@@ -524,9 +533,25 @@ viewSearch { showAutocomplete, active, query } =
                                 , ( "margin-top", "0" )
                                 ]
                             ]
-                            [ dropdownItem "status:"
-                            , dropdownItem "team:"
-                            ]
+                          <|
+                            case query of
+                                "status:" ->
+                                    [ dropdownItem "status: paused"
+                                    , dropdownItem "status: pending"
+                                    , dropdownItem "status: failed"
+                                    , dropdownItem "status: errored"
+                                    , dropdownItem "status: aborted"
+                                    , dropdownItem "status: running"
+                                    , dropdownItem "status: succeeded"
+                                    ]
+
+                                "team: " ->
+                                    []
+
+                                _ ->
+                                    [ dropdownItem "status:"
+                                    , dropdownItem "team:"
+                                    ]
                         ]
                     else
                         []
