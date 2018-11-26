@@ -231,8 +231,7 @@ update msg model =
                                 | searchBar =
                                     Expanded
                                         { r
-                                            | showAutocomplete =
-                                                query model == "status:"
+                                            | showAutocomplete = False
                                         }
                             }
 
@@ -433,6 +432,7 @@ view model =
                 { showAutocomplete = showAutocomplete model
                 , active = String.length (query model) > 0
                 , query = query model
+                , teams = model.teams
                 }
             ++ viewLogin model
 
@@ -489,8 +489,8 @@ viewLoginState { userState, isUserMenuExpanded } =
             ]
 
 
-viewSearch : { a | showAutocomplete : Bool, active : Bool, query : String } -> List (Html Msg)
-viewSearch { showAutocomplete, active, query } =
+viewSearch : { a | showAutocomplete : Bool, active : Bool, query : String, teams : RemoteData.WebData (List Concourse.Team) } -> List (Html Msg)
+viewSearch { showAutocomplete, active, query, teams } =
     let
         dropdownItem : String -> Html Msg
         dropdownItem text =
@@ -534,7 +534,7 @@ viewSearch { showAutocomplete, active, query } =
                                 ]
                             ]
                           <|
-                            case query of
+                            case (String.trim query) of
                                 "status:" ->
                                     [ dropdownItem "status: paused"
                                     , dropdownItem "status: pending"
@@ -545,13 +545,21 @@ viewSearch { showAutocomplete, active, query } =
                                     , dropdownItem "status: succeeded"
                                     ]
 
-                                "team: " ->
-                                    []
+                                "team:" ->
+                                    case teams of
+                                        RemoteData.Success ts ->
+                                            List.map dropdownItem (List.map (\team -> "team: " ++ team.name) <| List.take 10 ts)
 
-                                _ ->
+                                        _ ->
+                                            []
+
+                                "" ->
                                     [ dropdownItem "status:"
                                     , dropdownItem "team:"
                                     ]
+
+                                _ ->
+                                    []
                         ]
                     else
                         []

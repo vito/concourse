@@ -1,18 +1,20 @@
 module NewestTopBarTests exposing (all)
 
+import Concourse
+import Dict
+import Expect exposing (..)
+import Html.Attributes as Attr
 import Html.Styled exposing (toUnstyled)
+import LoginRedirect
 import NewestTopBar
 import QueryString
+import RemoteData
 import Routes
 import Test exposing (..)
+import Test.Html.Event as Event
 import Test.Html.Query as Query
 import Test.Html.Selector as Selector exposing (attribute, containing, id, style, tag, text, class)
-import Html.Attributes as Attr
-import Expect exposing (..)
 import UserState
-import Dict
-import LoginRedirect
-import Test.Html.Event as Event
 
 
 rspecStyleDescribe : String -> subject -> List (subject -> Test) -> Test
@@ -530,12 +532,10 @@ all =
                     >> Tuple.first
                     >> NewestTopBar.query
                     >> Expect.equal ("test")
-            , it "shows the list of statuses when `status:` is clicked in the dropdown" <|
+            , it "shows the list of statuses when `status:` is typed in the search bar" <|
                 NewestTopBar.update NewestTopBar.FocusMsg
                     >> Tuple.first
                     >> NewestTopBar.update (NewestTopBar.FilterMsg "status:")
-                    >> Tuple.first
-                    >> NewestTopBar.update NewestTopBar.BlurMsg
                     >> Tuple.first
                     >> NewestTopBar.view
                     >> toUnstyled
@@ -552,7 +552,7 @@ all =
                         , Query.index 5 >> Query.has [ text "status: running" ]
                         , Query.index 6 >> Query.has [ text "status: succeeded" ]
                         ]
-            , it "once you pick a status, the dropdown is gone" <|
+            , it "after typing `status: pending` the dropdown is empty" <|
                 NewestTopBar.update NewestTopBar.FocusMsg
                     >> Tuple.first
                     >> NewestTopBar.update (NewestTopBar.FilterMsg "status:")
@@ -563,6 +563,8 @@ all =
                     >> toUnstyled
                     >> Query.fromHtml
                     >> Query.findAll [ id "search-dropdown" ]
+                    >> Query.first
+                    >> Query.children []
                     >> Query.count (Expect.equal 0)
             ]
         , rspecStyleDescribe "when search query is `status:`"
@@ -587,6 +589,62 @@ all =
                         , Query.index 5 >> Query.has [ text "status: running" ]
                         , Query.index 6 >> Query.has [ text "status: succeeded" ]
                         ]
+            ]
+        , rspecStyleDescribe "when the search query is `team:`"
+            (NewestTopBar.init { logical = Routes.Dashboard, queries = (QueryString.parse "search=team:"), page = Nothing, hash = "" }
+                |> Tuple.first
+            )
+            [ it "when the user is not logged in the dropdown is empty" <|
+                NewestTopBar.update (NewestTopBar.FocusMsg)
+                    >> Tuple.first
+                    >> NewestTopBar.view
+                    >> toUnstyled
+                    >> Query.fromHtml
+                    >> Query.find [ id "search-dropdown" ]
+                    >> Query.children []
+                    >> Query.count (Expect.equal 0)
+            , it "when the user is logged in, and there are teams, the dropdown displays them" <|
+                NewestTopBar.update (NewestTopBar.FocusMsg)
+                    >> Tuple.first
+                    >> NewestTopBar.update (NewestTopBar.TeamsFetched (RemoteData.Success [ (Concourse.Team 1 "team1"), (Concourse.Team 2 "team2") ]))
+                    >> Tuple.first
+                    >> NewestTopBar.view
+                    >> toUnstyled
+                    >> Query.fromHtml
+                    >> Query.find [ id "search-dropdown" ]
+                    >> Query.children []
+                    >> Expect.all
+                        [ Query.count (Expect.equal 2)
+                        , Query.first >> Query.has [ tag "li", text "team1" ]
+                        , Query.index 1 >> Query.has [ tag "li", text "team2" ]
+                        ]
+            , it "when there are teams, the dropdown only displays the first 10" <|
+                NewestTopBar.update (NewestTopBar.FocusMsg)
+                    >> Tuple.first
+                    >> NewestTopBar.update
+                        (NewestTopBar.TeamsFetched
+                            (RemoteData.Success
+                                [ (Concourse.Team 1 "team1")
+                                , (Concourse.Team 2 "team2")
+                                , (Concourse.Team 3 "team3")
+                                , (Concourse.Team 4 "team4")
+                                , (Concourse.Team 5 "team5")
+                                , (Concourse.Team 6 "team6")
+                                , (Concourse.Team 7 "team7")
+                                , (Concourse.Team 8 "team8")
+                                , (Concourse.Team 9 "team9")
+                                , (Concourse.Team 10 "team10")
+                                , (Concourse.Team 11 "team11")
+                                ]
+                            )
+                        )
+                    >> Tuple.first
+                    >> NewestTopBar.view
+                    >> toUnstyled
+                    >> Query.fromHtml
+                    >> Query.find [ id "search-dropdown" ]
+                    >> Query.children []
+                    >> Query.count (Expect.equal 10)
             ]
         , rspecStyleDescribe "dropdown stuff"
             (NewestTopBar.init { logical = Routes.Dashboard, queries = QueryString.empty, page = Nothing, hash = "" }
