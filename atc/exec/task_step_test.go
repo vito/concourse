@@ -18,6 +18,7 @@ import (
 	"github.com/concourse/concourse/atc/creds"
 	"github.com/concourse/concourse/atc/db"
 	"github.com/concourse/concourse/atc/exec"
+	"github.com/concourse/concourse/atc/exec/artifact"
 	"github.com/concourse/concourse/atc/exec/execfakes"
 	"github.com/concourse/concourse/atc/worker"
 	"github.com/concourse/concourse/atc/worker/workerfakes"
@@ -54,7 +55,7 @@ var _ = Describe("TaskStep", func() {
 		inputMapping  map[string]string
 		outputMapping map[string]string
 
-		repo  *worker.ArtifactRepository
+		repo  *artifact.Repository
 		state *execfakes.FakeRunState
 
 		taskStep exec.Step
@@ -83,7 +84,7 @@ var _ = Describe("TaskStep", func() {
 		jobID = 12345
 		configSource = new(execfakes.FakeTaskConfigSource)
 
-		repo = worker.NewArtifactRepository()
+		repo = artifact.NewRepository()
 		state = new(execfakes.FakeRunState)
 		state.ArtifactsReturns(repo)
 
@@ -1157,7 +1158,6 @@ var _ = Describe("TaskStep", func() {
 							_, _, _, _, _, containerSpec, workerSpec, _ := fakeWorkerClient.FindOrCreateContainerArgsForCall(0)
 							Expect(containerSpec.ImageSpec).To(Equal(worker.ImageSpec{
 								ImageArtifactSource: imageArtifactSource,
-								ImageArtifactName:   worker.ArtifactName(imageArtifactName),
 							}))
 
 							Expect(workerSpec.ResourceType).To(Equal(""))
@@ -1194,7 +1194,6 @@ var _ = Describe("TaskStep", func() {
 										_, _, _, _, _, containerSpec, workerSpec, _ := fakeWorkerClient.FindOrCreateContainerArgsForCall(0)
 										Expect(containerSpec.ImageSpec).To(Equal(worker.ImageSpec{
 											ImageArtifactSource: imageArtifactSource,
-											ImageArtifactName:   worker.ArtifactName(imageArtifactName),
 										}))
 
 										Expect(workerSpec.ResourceType).To(Equal(""))
@@ -1225,7 +1224,6 @@ var _ = Describe("TaskStep", func() {
 										_, _, _, _, _, containerSpec, workerSpec, _ := fakeWorkerClient.FindOrCreateContainerArgsForCall(0)
 										Expect(containerSpec.ImageSpec).To(Equal(worker.ImageSpec{
 											ImageArtifactSource: imageArtifactSource,
-											ImageArtifactName:   worker.ArtifactName(imageArtifactName),
 										}))
 
 										Expect(workerSpec.ResourceType).To(Equal(""))
@@ -1257,7 +1255,6 @@ var _ = Describe("TaskStep", func() {
 										_, _, _, _, _, containerSpec, workerSpec, _ := fakeWorkerClient.FindOrCreateContainerArgsForCall(0)
 										Expect(containerSpec.ImageSpec).To(Equal(worker.ImageSpec{
 											ImageArtifactSource: imageArtifactSource,
-											ImageArtifactName:   worker.ArtifactName(imageArtifactName),
 										}))
 										Expect(workerSpec.ResourceType).To(Equal(""))
 									})

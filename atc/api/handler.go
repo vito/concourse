@@ -107,6 +107,7 @@ func NewHandler(
 		atc.GetBuildPlan:        buildHandlerFactory.HandlerFor(buildServer.GetBuildPlan),
 		atc.GetBuildPreparation: buildHandlerFactory.HandlerFor(buildServer.GetBuildPreparation),
 		atc.BuildEvents:         buildHandlerFactory.HandlerFor(buildServer.BuildEvents),
+		atc.ListBuildArtifacts:  buildHandlerFactory.HandlerFor(buildServer.GetBuildArtifacts),
 
 		atc.ListAllJobs:    http.HandlerFunc(jobServer.ListAllJobs),
 		atc.ListJobs:       pipelineHandlerFactory.HandlerFor(jobServer.ListJobs),
