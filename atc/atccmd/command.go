@@ -749,6 +749,7 @@ func (cmd *RunCommand) constructBackendMembers(
 	dbWorkerLifecycle := db.NewWorkerLifecycle(dbConn)
 	dbResourceCacheLifecycle := db.NewResourceCacheLifecycle(dbConn)
 	dbContainerRepository := db.NewContainerRepository(dbConn)
+	dbArtifactLifecycle := db.NewArtifactLifecycle(dbConn)
 	resourceConfigCheckSessionLifecycle := db.NewResourceConfigCheckSessionLifecycle(dbConn)
 	dbBuildFactory := db.NewBuildFactory(dbConn, lockFactory, cmd.GC.OneOffBuildGracePeriod)
 	bus := dbConn.Bus()
@@ -794,6 +795,7 @@ func (cmd *RunCommand) constructBackendMembers(
 				gc.NewResourceCacheUseCollector(dbResourceCacheLifecycle),
 				gc.NewResourceConfigCollector(dbResourceConfigFactory),
 				gc.NewResourceCacheCollector(dbResourceCacheLifecycle),
+				gc.NewArtifactCollector(dbArtifactLifecycle),
 				gc.NewVolumeCollector(
 					dbVolumeRepository,
 					cmd.GC.MissingGracePeriod,
