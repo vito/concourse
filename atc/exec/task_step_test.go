@@ -389,6 +389,23 @@ var _ = Describe("TaskStep", func() {
 						sourceMap := repo.AsMap()
 						Expect(sourceMap).To(ConsistOf(artifactSource1, artifactSource2, artifactSource3))
 					})
+
+					It("initializes the outputs as artifacts", func() {
+						Expect(fakeVolume1.InitializeArtifactCallCount()).To(Equal(1))
+						outputName, id := fakeVolume1.InitializeArtifactArgsForCall(0)
+						Expect(outputName).To(Equal("some-output"))
+						Expect(id).To(Equal(buildID))
+
+						Expect(fakeVolume2.InitializeArtifactCallCount()).To(Equal(1))
+						outputName, id = fakeVolume2.InitializeArtifactArgsForCall(0)
+						Expect(outputName).To(Equal("some-other-output"))
+						Expect(id).To(Equal(buildID))
+
+						Expect(fakeVolume3.InitializeArtifactCallCount()).To(Equal(1))
+						outputName, id = fakeVolume3.InitializeArtifactArgsForCall(0)
+						Expect(outputName).To(Equal("some-trailing-slash-output"))
+						Expect(id).To(Equal(buildID))
+					})
 				})
 			})
 
