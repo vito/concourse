@@ -49,6 +49,8 @@ func (f *resourceFactory) NewResource(
 		&worker.CertsVolumeMount{Logger: logger},
 	}
 
+	containerSpec.Type = metadata.Type
+
 	container, err := f.workerClient.FindOrCreateContainer(
 		ctx,
 		logger,

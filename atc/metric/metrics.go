@@ -111,9 +111,11 @@ func (event SchedulingJobDuration) Emit(logger lager.Logger) {
 }
 
 type WorkerContainers struct {
-	WorkerName string
-	Platform   string
-	Containers int
+	WorkerName       string
+	Platform         string
+	ActiveContainers int
+	BuildContainers  int
+	CheckContainers  int
 }
 
 func (event WorkerContainers) Emit(logger lager.Logger) {
@@ -121,7 +123,7 @@ func (event WorkerContainers) Emit(logger lager.Logger) {
 		logger.Session("worker-containers"),
 		Event{
 			Name:  "worker containers",
-			Value: event.Containers,
+			Value: event.ActiveContainers,
 			State: EventStateOK,
 			Attributes: map[string]string{
 				"worker":   event.WorkerName,
@@ -129,6 +131,31 @@ func (event WorkerContainers) Emit(logger lager.Logger) {
 			},
 		},
 	)
+
+	emit(
+		logger.Session("build-containers-count"),
+		Event{
+			Name:  "build containers",
+			Value: event.BuildContainers,
+			State: EventStateOK,
+			Attributes: map[string]string{
+				"worker": event.WorkerName,
+			},
+		},
+	)
+
+	emit(
+		logger.Session("check-containers-count"),
+		Event{
+			Name:  "check containers",
+			Value: event.CheckContainers,
+			State: EventStateOK,
+			Attributes: map[string]string{
+				"worker": event.WorkerName,
+			},
+		},
+	)
+
 }
 
 type WorkerVolumes struct {

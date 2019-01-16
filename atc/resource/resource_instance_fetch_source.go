@@ -104,6 +104,7 @@ func (s *resourceInstanceFetchSource) Create(ctx context.Context) (VersionedSour
 		Tags:   s.tags,
 		TeamID: s.teamID,
 		Env:    s.metadata.Env(),
+		Type:   s.session.Metadata.Type,
 
 		Outputs: map[string]string{
 			"resource": mountPath,

@@ -154,6 +154,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "",
                 "active_containers": 0,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": [
                   {
                     "type": "resource-1",
@@ -179,6 +181,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "",
                 "active_containers": 0,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": null,
                 "platform": "platform2",
                 "tags": [
@@ -196,6 +200,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "",
                 "active_containers": 0,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": null,
                 "platform": "platform2",
                 "tags": [
@@ -213,6 +219,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "http://2.2.3.4:7788",
                 "active_containers": 1,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": [
                   {
                     "type": "resource-1",
@@ -243,6 +251,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "",
                 "active_containers": 10,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": null,
                 "platform": "platform3",
                 "tags": [],
@@ -258,6 +268,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "",
                 "active_containers": 7,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": null,
                 "platform": "platform4",
                 "tags": [
@@ -275,6 +287,8 @@ var _ = Describe("Fly CLI", func() {
                 "baggageclaim_url": "",
                 "active_containers": 5,
                 "active_volumes": 0,
+                "build_containers": 0,
+                "check_containers": 0,
                 "resource_types": null,
                 "platform": "platform5",
                 "tags": [],
