@@ -172,7 +172,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "4.5.6",
                 "start_time": 0,
                 "state": "running",
-								"ephemeral": false
+                "ephemeral": false
               },
               {
                 "addr": "5.5.5.5:7777",
@@ -189,7 +189,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "1.2.3",
                 "start_time": 0,
                 "state": "running",
-								"ephemeral": true
+                "ephemeral": true
               },
               {
                 "addr": "7.7.7.7:7777",
@@ -206,7 +206,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "",
                 "start_time": 0,
                 "state": "running",
-								"ephemeral": false
+                "ephemeral": false
               },
               {
                 "addr": "2.2.3.4:7777",
@@ -236,7 +236,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "4.5.6",
                 "start_time": 0,
                 "state": "landing",
-								"ephemeral": false
+                "ephemeral": false
               },
               {
                 "addr": "3.2.3.4:7777",
@@ -251,7 +251,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "4.5.6",
                 "start_time": 0,
                 "state": "landed",
-								"ephemeral": false
+                "ephemeral": false
               },
               {
                 "addr": "",
@@ -268,7 +268,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "4.5.6",
                 "start_time": 0,
                 "state": "stalled",
-								"ephemeral": false
+                "ephemeral": false
               },
               {
                 "addr": "3.2.3.4:7777",
@@ -283,7 +283,7 @@ var _ = Describe("Fly CLI", func() {
                 "version": "4.5.6",
                 "start_time": 0,
                 "state": "retiring",
-								"ephemeral": false
+                "ephemeral": false
               }
             ]`))
 				})
