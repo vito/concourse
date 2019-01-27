@@ -1,0 +1,20 @@
+platform: ((platform))
+
+image_resource:
+  type: registry-image
+  source:
+    repository: ubuntu
+    tag: ((ubuntu_tag))
+
+params:
+  SOME_PARAM: ((some_var))
+
+run:
+  path: ((run_path))
+  args:
+  - -exuc
+  - |
+    env
+    echo some_var is ((some_var))
+    echo pipeline_var is ((pipeline_var))
+    echo ubuntu_tag is ((ubuntu_tag))
