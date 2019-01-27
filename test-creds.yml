@@ -9,14 +9,33 @@ resources:
   type: git
   source:
     uri: https://github.com/vito/concourse
-    branch: test-creds
+    branch: test-task-vars-with-creds
 
 jobs:
 - name: test
   plan:
   - get: concourse
   - task: test
-    file: concourse/ci/tasks/test-creds.yml
+    config:
+      platform: ((platform))
+
+      image_resource:
+        type: registry-image
+        source:
+          repository: ubuntu
+          tag: ((ubuntu_tag))
+
+      params:
+        SOME_PARAM: ((ubuntu_tag))
+
+      run:
+        path: ((run_path))
+        args:
+        - -exuc
+        - |
+          env
+          echo pipeline_var is ((pipeline_var))
+          echo ubuntu_tag is ((ubuntu_tag))
     vars:
       some_var: hi_im_some_var
       pipeline_var: overruled
