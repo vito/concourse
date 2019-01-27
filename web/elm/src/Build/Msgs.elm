@@ -1,4 +1,4 @@
-module Build.Msgs exposing (HoveredButton(..), Msg(..))
+module Build.Msgs exposing (HoveredButton(..), Msg(..), StepID)
 
 import Concourse
 import Concourse.BuildEvents
@@ -30,7 +30,12 @@ type Msg
     | ScrollDown
 
 
+type alias StepID =
+    String
+
+
 type HoveredButton
     = Neither
     | Abort
     | Trigger
+    | FirstOccurrence StepID
