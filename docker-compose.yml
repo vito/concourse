@@ -28,6 +28,7 @@ services:
     - CONCOURSE_ADD_LOCAL_USER=test:test,guest:guest
     - CONCOURSE_MAIN_TEAM_LOCAL_USER=test
     - CONCOURSE_LOG_LEVEL=debug
+    - CONCOURSE_DUMMY_CREDS_VAR=pipeline_var=SOME_VAR,platform=linux,ubuntu_tag=xenial,run_path=bash
 
   worker:
     build:
@@ -35,8 +36,8 @@ services:
       dockerfile: ${DOCKERFILE}
     image: concourse/concourse:local
     command: worker
-    privileged: true
-    depends_on: [web]
+    cap_add: [SYS_ADMIN]
+    stop_signal: SIGUSR2
     ports: ["7777:7777", "7788:7788"]
     environment:
     - CONCOURSE_LOG_LEVEL=debug
@@ -44,7 +45,7 @@ services:
     - CONCOURSE_EPHEMERAL=${CONCOURSE_EPHEMERAL:-true}
 
       # avoid using loopbacks
-    - CONCOURSE_BAGGAGECLAIM_DRIVER=overlay
+    # - CONCOURSE_BAGGAGECLAIM_DRIVER=overlay
 
       # so we can reach Garden/Baggageclaim for debugging
     - CONCOURSE_BIND_IP=0.0.0.0
@@ -53,3 +54,7 @@ services:
       # so that CI can configure a different network range that doesn't overlap
       # with the outer Garden
     - CONCOURSE_GARDEN_NETWORK_POOL
+
+      # so that these can be enabled on ChromeOS devices
+    - CONCOURSE_GARDEN_USE_HOUDINI=true
+    - CONCOURSE_BAGGAGECLAIM_DISABLE_USER_NAMESPACES=true

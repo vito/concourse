@@ -1,0 +1,22 @@
+---
+resources_types:
+- name: git
+  type: registry-image
+  source: {repository: concourse/git-resource}
+
+resources:
+- name: concourse
+  type: git
+  source:
+    uri: https://github.com/concourse/concourse
+    branch: test-creds
+
+jobs:
+- name: test
+  plan:
+  - get: concourse
+  - task: test
+    file: concourse/ci/tasks/test-creds.yml
+    vars:
+      some_var: 1.2.3
+      some_renamed_var: ((pipeline_var))
