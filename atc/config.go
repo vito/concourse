@@ -21,11 +21,14 @@ const GARDEN_CLIENT_HTTP_TIMEOUT = 5 * time.Minute
 type Tags []string
 
 type Config struct {
-	Groups        GroupConfigs    `json:"groups,omitempty"`
-	Resources     ResourceConfigs `json:"resources,omitempty"`
-	ResourceTypes ResourceTypes   `json:"resource_types,omitempty"`
-	Jobs          JobConfigs      `json:"jobs,omitempty"`
+	Groups        GroupConfigs     `json:"groups,omitempty"`
+	Resources     ResourceConfigs  `json:"resources,omitempty"`
+	ResourceTypes ResourceTypes    `json:"resource_types,omitempty"`
+	Jobs          JobConfigs       `json:"jobs,omitempty"`
+	VarSources    VarSourceConfigs `json:"var_sources,omitempty"`
 }
+
+var TopLevelConfigKeys = []string{"groups", "resources", "resource_types", "jobs", "var_sources"}
 
 type GroupConfig struct {
 	Name      string   `json:"name"`
@@ -43,6 +46,24 @@ func (groups GroupConfigs) Lookup(name string) (GroupConfig, int, bool) {
 	}
 
 	return GroupConfig{}, -1, false
+}
+
+type VarSourceConfig struct {
+	Name   string      `json:"name"`
+	Type   string      `json:"type"`
+	Config interface{} `json:"config"`
+}
+
+type VarSourceConfigs []VarSourceConfig
+
+func (c VarSourceConfigs) Lookup(name string) (VarSourceConfig, bool) {
+	for _, cm := range c {
+		if cm.Name == name {
+			return cm, true
+		}
+	}
+
+	return VarSourceConfig{}, false
 }
 
 type ResourceConfig struct {

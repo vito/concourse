@@ -25,3 +25,7 @@ func (factory *ssmManagerFactory) AddConfig(group *flags.Group) creds.Manager {
 	subGroup.Namespace = "aws-ssm"
 	return manager
 }
+
+func (factory *ssmManagerFactory) NewInstance() creds.Manager {
+	return &SsmManager{}
+}

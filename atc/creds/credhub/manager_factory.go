@@ -27,3 +27,7 @@ func (factory *credhubManagerFactory) AddConfig(group *flags.Group) creds.Manage
 
 	return manager
 }
+
+func (factory *credhubManagerFactory) NewInstance() creds.Manager {
+	return &CredHubManager{}
+}

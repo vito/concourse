@@ -10,11 +10,12 @@ import (
 
 	"code.cloudfoundry.org/lager"
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
+
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/atc/db/encryption"
 	"github.com/concourse/concourse/atc/db/lock"
 	"github.com/concourse/concourse/atc/event"
-	"github.com/lib/pq"
 )
 
 const schema = "exec.v2"
@@ -43,7 +44,30 @@ const (
 	BuildStatusErrored   BuildStatus = "errored"
 )
 
-var buildsQuery = psql.Select("b.id, b.name, b.job_id, b.team_id, b.status, b.manually_triggered, b.scheduled, b.schema, b.private_plan, b.public_plan, b.create_time, b.start_time, b.end_time, b.reap_time, j.name, b.pipeline_id, p.name, t.name, b.nonce, b.drained, b.aborted, b.completed").
+var buildsQuery = psql.Select(`
+		b.id,
+		b.name,
+		b.job_id,
+		b.team_id,
+		b.status,
+		b.manually_triggered,
+		b.scheduled,
+		b.schema,
+		b.private_plan,
+		b.public_plan,
+		b.create_time,
+		b.start_time,
+		b.end_time,
+		b.reap_time,
+		j.name,
+		b.pipeline_id,
+		p.name,
+		t.name,
+		b.nonce,
+		b.drained,
+		b.aborted,
+		b.completed
+	`).
 	From("builds b").
 	JoinClause("LEFT OUTER JOIN jobs j ON b.job_id = j.id").
 	JoinClause("LEFT OUTER JOIN pipelines p ON b.pipeline_id = p.id").
@@ -1126,7 +1150,30 @@ func scanBuild(b *build, row scannable, encryptionStrategy encryption.Strategy) 
 		status                                                 string
 	)
 
-	err := row.Scan(&b.id, &b.name, &jobID, &b.teamID, &status, &b.isManuallyTriggered, &b.scheduled, &schema, &privatePlan, &publicPlan, &createTime, &startTime, &endTime, &reapTime, &jobName, &pipelineID, &pipelineName, &b.teamName, &nonce, &drained, &aborted, &completed)
+	err := row.Scan(
+		&b.id,
+		&b.name,
+		&jobID,
+		&b.teamID,
+		&status,
+		&b.isManuallyTriggered,
+		&b.scheduled,
+		&schema,
+		&privatePlan,
+		&publicPlan,
+		&createTime,
+		&startTime,
+		&endTime,
+		&reapTime,
+		&jobName,
+		&pipelineID,
+		&pipelineName,
+		&b.teamName,
+		&nonce,
+		&drained,
+		&aborted,
+		&completed,
+	)
 	if err != nil {
 		return err
 	}

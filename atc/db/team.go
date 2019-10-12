@@ -8,11 +8,13 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
+
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/atc/creds"
 	"github.com/concourse/concourse/atc/db/lock"
 	"github.com/concourse/concourse/atc/event"
-	"github.com/lib/pq"
+	"github.com/concourse/concourse/atc/utils"
 )
 
 var ErrConfigComparisonFailed = errors.New("comparison with existing config failed during save")
@@ -347,6 +349,15 @@ func (t *team) SavePipeline(
 		return nil, false, err
 	}
 
+	varSourcesPayload, err := json.Marshal(config.VarSources)
+	if err != nil {
+		return nil, false, err
+	}
+	encryptedVarSourcesPayload, err := utils.EncryptString(string(varSourcesPayload), "atc")
+	if err != nil {
+		return nil, false, err
+	}
+
 	jobGroups := make(map[string][]string)
 	for _, group := range config.Groups {
 		for _, job := range group.Jobs {
@@ -378,12 +389,13 @@ func (t *team) SavePipeline(
 	if existingConfig == 0 {
 		err = psql.Insert("pipelines").
 			SetMap(map[string]interface{}{
-				"name":     pipelineName,
-				"groups":   groupsPayload,
-				"version":  sq.Expr("nextval('config_version_seq')"),
-				"ordering": sq.Expr("currval('pipelines_id_seq')"),
-				"paused":   initiallyPaused,
-				"team_id":  t.id,
+				"name":        pipelineName,
+				"groups":      groupsPayload,
+				"var_sources": encryptedVarSourcesPayload,
+				"version":     sq.Expr("nextval('config_version_seq')"),
+				"ordering":    sq.Expr("currval('pipelines_id_seq')"),
+				"paused":      initiallyPaused,
+				"team_id":     t.id,
 			}).
 			Suffix("RETURNING id").
 			RunWith(tx).
@@ -396,6 +408,7 @@ func (t *team) SavePipeline(
 	} else {
 		update := psql.Update("pipelines").
 			Set("groups", groupsPayload).
+			Set("var_sources", encryptedVarSourcesPayload).
 			Set("version", sq.Expr("nextval('config_version_seq')")).
 			Where(sq.Eq{
 				"name":    pipelineName,
@@ -1145,8 +1158,11 @@ func (t *team) findContainer(whereClause sq.Sqlizer) (CreatingContainer, Created
 }
 
 func scanPipeline(p *pipeline, scan scannable) error {
-	var groups sql.NullString
-	err := scan.Scan(&p.id, &p.name, &groups, &p.configVersion, &p.teamID, &p.teamName, &p.paused, &p.public)
+	var (
+		groups     sql.NullString
+		varSources sql.NullString
+	)
+	err := scan.Scan(&p.id, &p.name, &groups, &varSources, &p.configVersion, &p.teamID, &p.teamName, &p.paused, &p.public)
 	if err != nil {
 		return err
 	}
@@ -1159,6 +1175,20 @@ func scanPipeline(p *pipeline, scan scannable) error {
 		}
 
 		p.groups = pipelineGroups
+	}
+
+	if varSources.Valid {
+		var pipelineVarSources atc.VarSourceConfigs
+		decryptedVarSource, err := utils.DecryptString(varSources.String, "atc")
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal([]byte(decryptedVarSource), &pipelineVarSources)
+		if err != nil {
+			return err
+		}
+
+		p.varSources = pipelineVarSources
 	}
 
 	return nil
