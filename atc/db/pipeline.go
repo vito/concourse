@@ -37,6 +37,7 @@ type Pipeline interface {
 	TeamID() int
 	TeamName() string
 	Groups() atc.GroupConfigs
+	VarSources() atc.VarSourceConfigs
 	ConfigVersion() ConfigVersion
 	Public() bool
 	Paused() bool
@@ -91,6 +92,7 @@ type pipeline struct {
 	teamID        int
 	teamName      string
 	groups        atc.GroupConfigs
+	varSources    atc.VarSourceConfigs
 	configVersion ConfigVersion
 	paused        bool
 	public        bool
@@ -109,6 +111,7 @@ var pipelinesQuery = psql.Select(`
 		p.id,
 		p.name,
 		p.groups,
+		p.var_sources,
 		p.version,
 		p.team_id,
 		t.name,
@@ -125,14 +128,15 @@ func newPipeline(conn Conn, lockFactory lock.LockFactory) *pipeline {
 	}
 }
 
-func (p *pipeline) ID() int                      { return p.id }
-func (p *pipeline) Name() string                 { return p.name }
-func (p *pipeline) TeamID() int                  { return p.teamID }
-func (p *pipeline) TeamName() string             { return p.teamName }
-func (p *pipeline) Groups() atc.GroupConfigs     { return p.groups }
-func (p *pipeline) ConfigVersion() ConfigVersion { return p.configVersion }
-func (p *pipeline) Public() bool                 { return p.public }
-func (p *pipeline) Paused() bool                 { return p.paused }
+func (p *pipeline) ID() int                          { return p.id }
+func (p *pipeline) Name() string                     { return p.name }
+func (p *pipeline) TeamID() int                      { return p.teamID }
+func (p *pipeline) TeamName() string                 { return p.teamName }
+func (p *pipeline) Groups() atc.GroupConfigs         { return p.groups }
+func (p *pipeline) VarSources() atc.VarSourceConfigs { return p.varSources }
+func (p *pipeline) ConfigVersion() ConfigVersion     { return p.configVersion }
+func (p *pipeline) Public() bool                     { return p.public }
+func (p *pipeline) Paused() bool                     { return p.paused }
 
 // IMPORTANT: This method is broken with the new resource config versions changes
 func (p *pipeline) Causality(versionedResourceID int) ([]Cause, error) {

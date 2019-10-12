@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"code.cloudfoundry.org/clock"
 	"context"
 	"fmt"
 	"sync"
@@ -10,7 +11,9 @@ import (
 	"code.cloudfoundry.org/lager/lagerctx"
 
 	"github.com/concourse/concourse/atc"
+	"github.com/concourse/concourse/atc/creds"
 	"github.com/concourse/concourse/atc/db"
+	"github.com/concourse/concourse/atc/engine/builder"
 	"github.com/concourse/concourse/atc/exec"
 	"github.com/concourse/concourse/atc/metric"
 )
@@ -32,8 +35,9 @@ type Runnable interface {
 //go:generate counterfeiter . StepBuilder
 
 type StepBuilder interface {
-	BuildStep(db.Build) (exec.Step, error)
+	BuildStep(db.Build, lager.Logger) (exec.Step, error)
 	CheckStep(db.Check) (exec.Step, error)
+	FinishStep(db.Build, lager.Logger)
 }
 
 func NewEngine(builder StepBuilder) Engine {
@@ -126,6 +130,8 @@ type engineBuild struct {
 	release       chan bool
 	trackedStates *sync.Map
 	waitGroup     *sync.WaitGroup
+
+	pipelineCredMgrs []creds.Manager
 }
 
 func (b *engineBuild) Run(logger lager.Logger) {
@@ -175,12 +181,20 @@ func (b *engineBuild) Run(logger lager.Logger) {
 
 	defer notifier.Close()
 
-	step, err := b.builder.BuildStep(b.build)
+	step, err := b.builder.BuildStep(b.build, logger)
 	if err != nil {
 		logger.Error("failed-to-build-step", err)
+
+		// Fails the build if BuildStep returned error. Because some unrecoverable error,
+		// like pipeline credential manager is wrong, will cause a build to never start
+		// to run.
+		builder.NewBuildStepDelegate(
+			b.build, b.build.PrivatePlan().ID, nil, clock.NewClock(),
+		).Errored(logger, err.Error())
+		b.finish(logger.Session("finish"), err, false)
+
 		return
 	}
-
 	b.trackStarted(logger)
 	defer b.trackFinished(logger)
 
@@ -207,16 +221,21 @@ func (b *engineBuild) Run(logger lager.Logger) {
 		done <- step.Run(ctx, state)
 	}()
 
+	// TODO - close pipeline credential managers
+
 	select {
 	case <-b.release:
 		logger.Info("releasing")
 
 	case err = <-done:
+		logger.Debug("engine-build-done")
 		b.finish(logger.Session("finish"), err, step.Succeeded())
 	}
 }
 
 func (b *engineBuild) finish(logger lager.Logger, err error, succeeded bool) {
+	b.builder.FinishStep(b.build, logger)
+
 	if err == context.Canceled {
 		b.saveStatus(logger, atc.StatusAborted)
 		logger.Info("aborted")

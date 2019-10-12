@@ -27,3 +27,7 @@ func (factory *vaultManagerFactory) AddConfig(group *flags.Group) creds.Manager 
 
 	return manager
 }
+
+func (factory *vaultManagerFactory) NewInstance() creds.Manager {
+	return &VaultManager{}
+}
