@@ -2,7 +2,6 @@ package builder
 
 import (
 	"code.cloudfoundry.org/lager"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -46,124 +45,73 @@ func NewStepBuilder(
 	redactSecrets bool,
 ) *stepBuilder {
 	return &stepBuilder{
-		stepFactory:      stepFactory,
-		delegateFactory:  delegateFactory,
-		externalURL:      externalURL,
-		globalSecrets:    secrets,
-		redactSecrets:    redactSecrets,
-		pipelineCredMgrs: map[int][]creds.Manager{},
+		stepFactory:     stepFactory,
+		delegateFactory: delegateFactory,
+		externalURL:     externalURL,
+		globalSecrets:   secrets,
+		redactSecrets:   redactSecrets,
 	}
 }
 
 type stepBuilder struct {
-	stepFactory      StepFactory
-	delegateFactory  DelegateFactory
-	externalURL      string
-	globalSecrets    creds.Secrets
-	redactSecrets    bool
-	pipelineCredMgrs map[int][]creds.Manager
+	stepFactory     StepFactory
+	delegateFactory DelegateFactory
+	externalURL     string
+	globalSecrets   creds.Secrets
+	redactSecrets   bool
 }
 
-func (builder *stepBuilder) FinishStep(build db.Build, logger lager.Logger) {
-	if builder.pipelineCredMgrs[build.ID()] != nil {
-		logger.Debug("close-pipeline-credential-managers")
-		for _, cm := range builder.pipelineCredMgrs[build.ID()] {
-			cm.Close(logger)
-		}
-		delete(builder.pipelineCredMgrs, build.ID())
-	}
-}
-
-func (builder *stepBuilder) BuildStep(build db.Build, logger lager.Logger) (exec.Step, error) {
+func (builder *stepBuilder) BuildStep(logger lager.Logger, build db.Build) (exec.Step, error) {
 	if build == nil {
-		return exec.IdentityStep{}, errors.New("Must provide a build")
+		return exec.IdentityStep{}, errors.New("must provide a build")
 	}
 
 	if build.Schema() != supportedSchema {
-		return exec.IdentityStep{}, errors.New("Schema not supported")
+		return exec.IdentityStep{}, errors.New("schema not supported")
 	}
 
 	pipeline, found, err := build.Pipeline()
+	if err != nil {
+		return exec.IdentityStep{}, errors.New(fmt.Sprintf("failed to find pipeline: %s", err.Error()))
+	}
 	if !found {
-		msg := "pipeline not found"
-		if err != nil {
-			msg = fmt.Sprintf("Failed to find pipeline: %s", err.Error())
-		}
-		return exec.IdentityStep{}, errors.New(msg)
+		return exec.IdentityStep{}, errors.New("pipeline not found")
 	}
 
-	multiVars, err := builder.multiPipelineVariables(
-		build,
-		logger,
-		creds.NewVariables(builder.globalSecrets, build.TeamName(), build.PipelineName()),
-		pipeline.VarSources())
+	globalVars := creds.NewVariables(builder.globalSecrets, build.TeamName(), build.PipelineName(), false)
+	varss, err := pipeline.Variables(logger, globalVars)
 	if err != nil {
 		return exec.IdentityStep{}, err
 	}
-	credVarsTracker := vars.NewCredVarsTracker(multiVars, builder.redactSecrets)
+	credVarsTracker := vars.NewCredVarsTracker(varss, builder.redactSecrets)
+
 	return builder.buildStep(build, build.PrivatePlan(), credVarsTracker), nil
 }
 
-func (builder *stepBuilder) multiPipelineVariables(build db.Build, logger lager.Logger, globalVars vars.Variables, pipelineVarSources atc.VarSourceConfigs) (vars.Variables, error) {
-	if pipelineVarSources == nil || len(pipelineVarSources) == 0 {
-		return globalVars, nil
-	}
-
-	varss := []vars.Variables{}
-	for _, cm := range pipelineVarSources {
-		factory := creds.ManagerFactories()[cm.Type]
-		if factory == nil {
-			return nil, fmt.Errorf("Unknown credential manager type: %s", cm.Type)
-		}
-		manager := factory.NewInstance()
-
-		// Interpolate variables in pipeline credential manager's config
-		newConfig, err := creds.NewParams(globalVars, atc.Params{"config": cm.Config}).Evaluate()
-		if err != nil {
-			return nil, err
-		}
-		b, err := json.Marshal(newConfig["config"])
-		if err != nil {
-			return nil, err
-		}
-		err = json.Unmarshal(b, &manager)
-		if err != nil {
-			return nil, err
-		}
-
-		err = manager.Init(logger)
-		if err != nil {
-			return nil, fmt.Errorf("Pipeline credential manager %s init failure: %s", cm.Name, err.Error())
-		}
-		builder.pipelineCredMgrs[build.ID()] = append(builder.pipelineCredMgrs[build.ID()], manager)
-	}
-	for _, mgr := range builder.pipelineCredMgrs[build.ID()] {
-		factory, err := mgr.NewSecretsFactory(logger)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to create secret factory")
-		}
-		varss = append(varss, creds.NewVariables(factory.NewSecrets(), build.TeamName(), build.PipelineName()))
-	}
-
-	// Only append globalVars after pipeline vars, so that pipeline vars take
-	// higher priority to interpolate variables.
-	varss = append(varss, globalVars)
-
-	return vars.NewMultiVars(varss), nil
-}
-
-func (builder *stepBuilder) CheckStep(check db.Check) (exec.Step, error) {
+func (builder *stepBuilder) CheckStep(logger lager.Logger, check db.Check) (exec.Step, error) {
 
 	if check == nil {
-		return exec.IdentityStep{}, errors.New("Must provide a check")
+		return exec.IdentityStep{}, errors.New("must provide a check")
 	}
 
 	if check.Schema() != supportedSchema {
-		return exec.IdentityStep{}, errors.New("Schema not supported")
+		return exec.IdentityStep{}, errors.New("schema not supported")
 	}
 
-	// TODO - should check step support pipeline credential managers?
-	credVarsTracker := vars.NewCredVarsTracker(creds.NewVariables(builder.globalSecrets, check.TeamName(), check.PipelineName()), builder.redactSecrets)
+	pipeline, found, err := check.Pipeline()
+	if err != nil {
+		return exec.IdentityStep{}, errors.New(fmt.Sprintf("failed to find pipeline: %s", err.Error()))
+	}
+	if !found {
+		return exec.IdentityStep{}, errors.New("pipeline not found")
+	}
+
+	globalVars := creds.NewVariables(builder.globalSecrets, check.TeamName(), check.PipelineName(), false)
+	varss, err := pipeline.Variables(logger, globalVars)
+	if err != nil {
+		return exec.IdentityStep{}, fmt.Errorf("failed to create pipeline variables: %s", err.Error())
+	}
+	credVarsTracker := vars.NewCredVarsTracker(varss, builder.redactSecrets)
 	return builder.buildCheckStep(check, check.Plan(), credVarsTracker), nil
 }
 

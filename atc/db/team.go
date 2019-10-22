@@ -1,6 +1,7 @@
 package db
 
 import (
+	"code.cloudfoundry.org/lager"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,7 +15,6 @@ import (
 	"github.com/concourse/concourse/atc/creds"
 	"github.com/concourse/concourse/atc/db/lock"
 	"github.com/concourse/concourse/atc/event"
-	"github.com/concourse/concourse/atc/utils"
 )
 
 var ErrConfigComparisonFailed = errors.New("comparison with existing config failed during save")
@@ -59,7 +59,7 @@ type Team interface {
 	IsContainerWithinTeam(string, bool) (bool, error)
 
 	FindContainerByHandle(string) (Container, bool, error)
-	FindCheckContainers(string, string, creds.Secrets) ([]Container, map[int]time.Time, error)
+	FindCheckContainers(lager.Logger, string, string, creds.Secrets) ([]Container, map[int]time.Time, error)
 	FindContainersByMetadata(ContainerMetadata) ([]Container, error)
 	FindCreatedContainerByHandle(string) (CreatedContainer, bool, error)
 	FindWorkerForContainer(handle string) (Worker, bool, error)
@@ -353,7 +353,7 @@ func (t *team) SavePipeline(
 	if err != nil {
 		return nil, false, err
 	}
-	encryptedVarSourcesPayload, err := utils.EncryptString(string(varSourcesPayload), "atc")
+	encryptedVarSourcesPayload, nonce, err := t.conn.EncryptionStrategy().Encrypt(varSourcesPayload)
 	if err != nil {
 		return nil, false, err
 	}
@@ -392,6 +392,7 @@ func (t *team) SavePipeline(
 				"name":        pipelineName,
 				"groups":      groupsPayload,
 				"var_sources": encryptedVarSourcesPayload,
+				"nonce":       nonce,
 				"version":     sq.Expr("nextval('config_version_seq')"),
 				"ordering":    sq.Expr("currval('pipelines_id_seq')"),
 				"paused":      initiallyPaused,
@@ -409,6 +410,7 @@ func (t *team) SavePipeline(
 		update := psql.Update("pipelines").
 			Set("groups", groupsPayload).
 			Set("var_sources", encryptedVarSourcesPayload).
+			Set("nonce", nonce).
 			Set("version", sq.Expr("nextval('config_version_seq')")).
 			Where(sq.Eq{
 				"name":    pipelineName,
@@ -639,7 +641,7 @@ func (t *team) CreateOneOffBuild() (Build, error) {
 
 	defer Rollback(tx)
 
-	build := &build{conn: t.conn, lockFactory: t.lockFactory}
+	build := newEmptyBuild(t.conn, t.lockFactory)
 	err = createBuild(tx, build, map[string]interface{}{
 		"name":    sq.Expr("nextval('one_off_name')"),
 		"team_id": t.id,
@@ -675,7 +677,7 @@ func (t *team) CreateStartedBuild(plan atc.Plan) (Build, error) {
 		return nil, err
 	}
 
-	build := &build{conn: t.conn, lockFactory: t.lockFactory}
+	build := newEmptyBuild(t.conn, t.lockFactory)
 	err = createBuild(tx, build, map[string]interface{}{
 		"name":         sq.Expr("nextval('one_off_name')"),
 		"team_id":      t.id,
@@ -776,7 +778,7 @@ func (t *team) UpdateProviderAuth(auth atc.TeamAuth) error {
 	return tx.Commit()
 }
 
-func (t *team) FindCheckContainers(pipelineName string, resourceName string, secretManager creds.Secrets) ([]Container, map[int]time.Time, error) {
+func (t *team) FindCheckContainers(logger lager.Logger, pipelineName string, resourceName string, secretManager creds.Secrets) ([]Container, map[int]time.Time, error) {
 	pipeline, found, err := t.Pipeline(pipelineName)
 	if err != nil {
 		return nil, nil, err
@@ -798,7 +800,11 @@ func (t *team) FindCheckContainers(pipelineName string, resourceName string, sec
 		return nil, nil, err
 	}
 
-	variables := creds.NewVariables(secretManager, t.name, pipeline.Name())
+	globalVariables := creds.NewVariables(secretManager, t.name, pipeline.Name(), false)
+	variables, err := pipeline.Variables(logger, globalVariables)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	versionedResourceTypes := pipelineResourceTypes.Deserialize()
 
@@ -1161,8 +1167,10 @@ func scanPipeline(p *pipeline, scan scannable) error {
 	var (
 		groups     sql.NullString
 		varSources sql.NullString
+		nonce      sql.NullString
+		nonceStr   *string
 	)
-	err := scan.Scan(&p.id, &p.name, &groups, &varSources, &p.configVersion, &p.teamID, &p.teamName, &p.paused, &p.public)
+	err := scan.Scan(&p.id, &p.name, &groups, &varSources, &nonce, &p.configVersion, &p.teamID, &p.teamName, &p.paused, &p.public)
 	if err != nil {
 		return err
 	}
@@ -1177,9 +1185,13 @@ func scanPipeline(p *pipeline, scan scannable) error {
 		p.groups = pipelineGroups
 	}
 
+	if nonce.Valid {
+		nonceStr = &nonce.String
+	}
+
 	if varSources.Valid {
 		var pipelineVarSources atc.VarSourceConfigs
-		decryptedVarSource, err := utils.DecryptString(varSources.String, "atc")
+		decryptedVarSource, err := p.conn.EncryptionStrategy().Decrypt(varSources.String, nonceStr)
 		if err != nil {
 			return err
 		}

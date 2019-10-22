@@ -1,7 +1,6 @@
 package configvalidate
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -43,7 +42,7 @@ func Validate(c Config) ([]ConfigWarning, []string) {
 	}
 
 	credentialManagersErr := validateVarSources(c)
-	if resourceTypesErr != nil {
+	if credentialManagersErr != nil {
 		errorMessages = append(errorMessages, formatErr("variable sources", credentialManagersErr))
 	}
 
@@ -699,22 +698,10 @@ func validateVarSources(c Config) error {
 			return fmt.Errorf("credential manager type %s is not supported in pipeline yet", cm.Type)
 		}
 
-		manager := factory.NewInstance()
-
-		var (
-			b   []byte
-			err error
-		)
-		b, err = json.Marshal(cm.Config)
+		manager, err := factory.NewInstance(cm.Config)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create credential manager %s: %s", cm.Name, err.Error())
 		}
-
-		err = json.Unmarshal(b, &manager)
-		if err != nil {
-			return err
-		}
-
 		err = manager.Validate()
 		if err != nil {
 			return fmt.Errorf("credential manager %s is invalid: %s", cm.Name, err.Error())

@@ -998,6 +998,7 @@ func (cmd *RunCommand) constructGCMember(
 		atc.ComponentCollectorVolumes:           gc.NewVolumeCollector(dbVolumeRepository, cmd.GC.MissingGracePeriod),
 		atc.ComponentCollectorContainers:        gc.NewContainerCollector(dbContainerRepository, jobRunner, cmd.GC.MissingGracePeriod),
 		atc.ComponentCollectorCheckSessions:     gc.NewResourceConfigCheckSessionCollector(resourceConfigCheckSessionLifecycle),
+		atc.ComponentCollectorVarSources:        creds.VarSourcePoolInstance(),
 	}
 
 	for collectorName, collector := range collectors {
@@ -1420,6 +1421,9 @@ func (cmd *RunCommand) configureComponentIntervals(componentFactory db.Component
 			}, {
 				Name:     atc.ComponentCollectorWorkers,
 				Interval: cmd.GC.Interval,
+			}, {
+				Name:     atc.ComponentCollectorVarSources,
+				Interval: 60 * time.Second,
 			},
 		})
 }
@@ -1612,7 +1616,7 @@ func (cmd *RunCommand) constructPipelineSyncer(
 		pipelineFactory,
 		componentFactory,
 		func(pipeline db.Pipeline) ifrit.Runner {
-			variables := creds.NewVariables(secretManager, pipeline.TeamName(), pipeline.Name())
+			variables := creds.NewVariables(secretManager, pipeline.TeamName(), pipeline.Name(), false)
 			return grouper.NewParallel(os.Interrupt, grouper.Members{
 				{
 					Name: fmt.Sprintf("radar:%d", pipeline.ID()),

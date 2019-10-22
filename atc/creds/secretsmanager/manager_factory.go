@@ -28,6 +28,6 @@ func (factory *managerFactory) AddConfig(group *flags.Group) creds.Manager {
 	return manager
 }
 
-func (factory *managerFactory) NewInstance() creds.Manager {
-	return &Manager{}
+func (factory *managerFactory) NewInstance(interface{}) (creds.Manager, error) {
+	return &Manager{}, nil
 }

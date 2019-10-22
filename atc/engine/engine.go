@@ -1,12 +1,12 @@
 package engine
 
 import (
-	"code.cloudfoundry.org/clock"
 	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	"code.cloudfoundry.org/clock"
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerctx"
 
@@ -35,9 +35,8 @@ type Runnable interface {
 //go:generate counterfeiter . StepBuilder
 
 type StepBuilder interface {
-	BuildStep(db.Build, lager.Logger) (exec.Step, error)
-	CheckStep(db.Check) (exec.Step, error)
-	FinishStep(db.Build, lager.Logger)
+	BuildStep(lager.Logger, db.Build) (exec.Step, error)
+	CheckStep(lager.Logger, db.Check) (exec.Step, error)
 }
 
 func NewEngine(builder StepBuilder) Engine {
@@ -181,7 +180,7 @@ func (b *engineBuild) Run(logger lager.Logger) {
 
 	defer notifier.Close()
 
-	step, err := b.builder.BuildStep(b.build, logger)
+	step, err := b.builder.BuildStep(logger, b.build)
 	if err != nil {
 		logger.Error("failed-to-build-step", err)
 
@@ -221,8 +220,6 @@ func (b *engineBuild) Run(logger lager.Logger) {
 		done <- step.Run(ctx, state)
 	}()
 
-	// TODO - close pipeline credential managers
-
 	select {
 	case <-b.release:
 		logger.Info("releasing")
@@ -234,8 +231,6 @@ func (b *engineBuild) Run(logger lager.Logger) {
 }
 
 func (b *engineBuild) finish(logger lager.Logger, err error, succeeded bool) {
-	b.builder.FinishStep(b.build, logger)
-
 	if err == context.Canceled {
 		b.saveStatus(logger, atc.StatusAborted)
 		logger.Info("aborted")
@@ -367,7 +362,7 @@ func (c *engineCheck) Run(logger lager.Logger) {
 		return
 	}
 
-	step, err := c.builder.CheckStep(c.check)
+	step, err := c.builder.CheckStep(logger, c.check)
 	if err != nil {
 		logger.Error("failed-to-create-check-step", err)
 		return

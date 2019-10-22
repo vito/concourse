@@ -26,6 +26,6 @@ func (factory *ssmManagerFactory) AddConfig(group *flags.Group) creds.Manager {
 	return manager
 }
 
-func (factory *ssmManagerFactory) NewInstance() creds.Manager {
-	return &SsmManager{}
+func (factory *ssmManagerFactory) NewInstance(interface{}) (creds.Manager, error) {
+	return &SsmManager{}, nil
 }

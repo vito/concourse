@@ -71,13 +71,13 @@ func (s *Server) SaveConfig(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		configWithoutUnknownToplevels, err := yaml.Marshal(ignoredUnknownTopLevels)
+		configWithoutUnknownTopLevels, err := yaml.Marshal(ignoredUnknownTopLevels)
 		if err != nil {
 			s.handleBadRequest(w, fmt.Sprintf("yaml re-marshal failed: %s", err))
 			return
 		}
 
-		err = yaml.UnmarshalStrict(configWithoutUnknownToplevels, &config, yaml.DisallowUnknownFields)
+		err = yaml.UnmarshalStrict(configWithoutUnknownTopLevels, &config, yaml.DisallowUnknownFields)
 		if err != nil {
 			session.Error("malformed-request-payload", err, lager.Data{
 				"content-type": r.Header.Get("Content-Type"),
@@ -102,7 +102,7 @@ func (s *Server) SaveConfig(w http.ResponseWriter, r *http.Request) {
 	teamName := rata.Param(r, "team_name")
 
 	if checkCredentials {
-		variables := creds.NewVariables(s.secretManager, teamName, pipelineName)
+		variables := creds.NewVariables(s.secretManager, teamName, pipelineName, false)
 
 		errs := validateCredParams(variables, config, session)
 		if errs != nil {

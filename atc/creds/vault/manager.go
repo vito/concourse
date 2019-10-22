@@ -108,36 +108,28 @@ func toDuration(s interface{}, defaultValue time.Duration) time.Duration {
 	return s.(time.Duration)
 }
 
-func (manager *VaultManager) UnmarshalJSON(text []byte) error {
-	var data map[string]interface{}
-	err := json.Unmarshal(text, &data)
-	if err != nil {
-		return err
-	}
+func (manager *VaultManager) Config(config map[string]interface{}) {
+	manager.URL = toString(config["url"])
+	manager.PathPrefix = toString(config["path_prefix"])
+	manager.SharedPath = toString(config["shared_path"])
 
-	manager.URL = toString(data["url"])
-	manager.PathPrefix = toString(data["path_prefix"])
-	manager.SharedPath = toString(data["shared_path"])
+	manager.TLS.CACert = toString(config["ca_cert"])
+	manager.TLS.CAPath = toString(config["ca_path"])
+	manager.TLS.ClientCert = toString(config["client_cert"])
+	manager.TLS.ClientKey = toString(config["client_key"])
+	manager.TLS.ServerName = toString(config["server_name"])
+	manager.TLS.Insecure = toBool(config["insecure_skip_verify"])
 
-	manager.TLS.CACert = toString(data["ca_cert"])
-	manager.TLS.CAPath = toString(data["ca_path"])
-	manager.TLS.ClientCert = toString(data["client_cert"])
-	manager.TLS.ClientKey = toString(data["client_key"])
-	manager.TLS.ServerName = toString(data["server_name"])
-	manager.TLS.Insecure = toBool(data["insecure_skip_verify"])
-
-	manager.Auth.ClientToken = toString(data["client_token"])
-	manager.Auth.Backend = toString(data["auth_backend"])
-	manager.Auth.BackendMaxTTL = toDuration(data["auth_max_ttl"], 0)
-	manager.Auth.RetryMax = toDuration(data["auth_retry_max"], 5*time.Minute)
-	manager.Auth.RetryInitial = toDuration(data["auth_retry_initial"], 1*time.Second)
-	if data["auth_param"] == nil {
+	manager.Auth.ClientToken = toString(config["client_token"])
+	manager.Auth.Backend = toString(config["auth_backend"])
+	manager.Auth.BackendMaxTTL = toDuration(config["auth_max_ttl"], 0)
+	manager.Auth.RetryMax = toDuration(config["auth_retry_max"], 5*time.Minute)
+	manager.Auth.RetryInitial = toDuration(config["auth_retry_initial"], 1*time.Second)
+	if config["auth_param"] == nil {
 		manager.Auth.Params = map[string]string{}
 	} else {
-		manager.Auth.Params = data["auth_param"].(map[string]string)
+		manager.Auth.Params = config["auth_param"].(map[string]string)
 	}
-
-	return nil
 }
 
 func (manager VaultManager) IsConfigured() bool {
