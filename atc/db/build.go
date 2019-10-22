@@ -79,12 +79,12 @@ var minMaxIdQuery = psql.Select("COALESCE(MAX(b.id), 0)", "COALESCE(MIN(b.id), 0
 //go:generate counterfeiter . Build
 
 type Build interface {
+	PipelineRef
+
 	ID() int
 	Name() string
 	JobID() int
 	JobName() string
-	PipelineID() int
-	PipelineName() string
 	TeamID() int
 	TeamName() string
 	Schema() string
@@ -125,8 +125,6 @@ type Build interface {
 	Resources() ([]BuildInput, []BuildOutput, error)
 	SaveImageResourceVersion(UsedResourceCache) error
 
-	Pipeline() (Pipeline, bool, error)
-
 	Delete() (bool, error)
 	MarkAsAborted() error
 	IsAborted() bool
@@ -138,6 +136,8 @@ type Build interface {
 }
 
 type build struct {
+	pipelineRef
+
 	id        int
 	name      string
 	status    BuildStatus
@@ -146,8 +146,6 @@ type build struct {
 	teamID   int
 	teamName string
 
-	pipelineID   int
-	pipelineName string
 	jobID        int
 	jobName      string
 
@@ -162,11 +160,13 @@ type build struct {
 	endTime    time.Time
 	reapTime   time.Time
 
-	conn        Conn
-	lockFactory lock.LockFactory
 	drained     bool
 	aborted     bool
 	completed   bool
+}
+
+func newEmptyBuild(conn Conn, lockFactory lock.LockFactory) *build {
+	return &build{pipelineRef: pipelineRef{conn: conn, lockFactory: lockFactory}}
 }
 
 var ErrBuildDisappeared = errors.New("build disappeared from db")
@@ -186,8 +186,6 @@ func (b *build) ID() int                      { return b.id }
 func (b *build) Name() string                 { return b.name }
 func (b *build) JobID() int                   { return b.jobID }
 func (b *build) JobName() string              { return b.jobName }
-func (b *build) PipelineID() int              { return b.pipelineID }
-func (b *build) PipelineName() string         { return b.pipelineName }
 func (b *build) TeamID() int                  { return b.teamID }
 func (b *build) TeamName() string             { return b.teamName }
 func (b *build) IsManuallyTriggered() bool    { return b.isManuallyTriggered }
@@ -512,28 +510,6 @@ func (b *build) Schedule() (bool, error) {
 	}
 
 	return rows == 1, nil
-}
-
-func (b *build) Pipeline() (Pipeline, bool, error) {
-	if b.pipelineID == 0 {
-		return nil, false, nil
-	}
-
-	row := pipelinesQuery.
-		Where(sq.Eq{"p.id": b.pipelineID}).
-		RunWith(b.conn).
-		QueryRow()
-
-	pipeline := newPipeline(b.conn, b.lockFactory)
-	err := scanPipeline(pipeline, row)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-
-	return pipeline, true, nil
 }
 
 func (b *build) SaveImageResourceVersion(rc UsedResourceCache) error {

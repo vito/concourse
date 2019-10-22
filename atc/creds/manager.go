@@ -17,7 +17,7 @@ type Manager interface {
 
 type ManagerFactory interface {
 	AddConfig(*flags.Group) Manager
-	NewInstance() Manager
+	NewInstance(interface{}) (Manager, error)
 }
 
 type Managers map[string]Manager
