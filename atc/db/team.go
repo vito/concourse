@@ -389,14 +389,14 @@ func (t *team) SavePipeline(
 	if existingConfig == 0 {
 		err = psql.Insert("pipelines").
 			SetMap(map[string]interface{}{
-				"name":        pipelineName,
-				"groups":      groupsPayload,
-				"var_sources": encryptedVarSourcesPayload,
-				"nonce":       nonce,
-				"version":     sq.Expr("nextval('config_version_seq')"),
-				"ordering":    sq.Expr("currval('pipelines_id_seq')"),
-				"paused":      initiallyPaused,
-				"team_id":     t.id,
+				"name":              pipelineName,
+				"groups":            groupsPayload,
+				"var_sources":       encryptedVarSourcesPayload,
+				"var_sources_nonce": nonce,
+				"version":           sq.Expr("nextval('config_version_seq')"),
+				"ordering":          sq.Expr("currval('pipelines_id_seq')"),
+				"paused":            initiallyPaused,
+				"team_id":           t.id,
 			}).
 			Suffix("RETURNING id").
 			RunWith(tx).
@@ -410,7 +410,7 @@ func (t *team) SavePipeline(
 		update := psql.Update("pipelines").
 			Set("groups", groupsPayload).
 			Set("var_sources", encryptedVarSourcesPayload).
-			Set("nonce", nonce).
+			Set("var_sources_nonce", nonce).
 			Set("version", sq.Expr("nextval('config_version_seq')")).
 			Where(sq.Eq{
 				"name":    pipelineName,

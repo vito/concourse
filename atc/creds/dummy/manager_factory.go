@@ -31,7 +31,7 @@ func (factory *managerFactory) AddConfig(group *flags.Group) creds.Manager {
 
 func (factory *managerFactory) NewInstance(config interface{}) (creds.Manager, error) {
 	if _, ok := config.(map[string]interface{}); !ok {
-		return nil, fmt.Errorf("invalid vault config format")
+		return nil, fmt.Errorf("invalid dummy config format")
 	} else {
 		manager := &Manager{}
 		return manager, nil
