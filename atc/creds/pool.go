@@ -1,12 +1,10 @@
 package creds
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagerctx"
 	"encoding/json"
 )
 
@@ -46,7 +44,7 @@ func (pool *varSourcePool) FindOrCreate(logger lager.Logger, config map[string]i
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
-	if pool.pool[key] == nil {
+	if inPool, ok := pool.pool[key]; !ok {
 		manager, err := factory.NewInstance(config)
 		if err != nil {
 			return nil, err
@@ -67,20 +65,19 @@ func (pool *varSourcePool) FindOrCreate(logger lager.Logger, config map[string]i
 		}
 	} else {
 		logger.Debug("found-existing-credential-manager")
+		inPool.lastUseTime = time.Now()
 	}
 
 	return pool.pool[key].NewSecrets(), nil
 }
 
-func (pool *varSourcePool) Run(ctx context.Context) error {
-	logger := lagerctx.FromContext(ctx).Session("var-source-reaper")
-
+func (pool *varSourcePool) Collect(logger lager.Logger) error {
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
-	logger.Debug("start", lager.Data{"count": len(pool.pool)})
+	logger.Debug("before collect", lager.Data{"pool-size": len(pool.pool)})
 	defer func() {
-		logger.Debug("done", lager.Data{"count": len(pool.pool)})
+		logger.Debug("after collect", lager.Data{"pool-size": len(pool.pool)})
 	}()
 
 	toDeleteKeys := []string{}
@@ -99,12 +96,12 @@ func (pool *varSourcePool) Run(ctx context.Context) error {
 	return nil
 }
 
-var pool = varSourcePool{
+var pool = &varSourcePool{
 	pool: map[string]*inPoolManager{},
 	lock: sync.Mutex{},
 	ttl:  5 * time.Minute,
 }
 
 func VarSourcePoolInstance() *varSourcePool {
-	return &pool
+	return pool
 }

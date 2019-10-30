@@ -116,7 +116,7 @@ var pipelinesQuery = psql.Select(`
 		p.name,
 		p.groups,
 		p.var_sources,
-		p.nonce,
+		p.var_sources_nonce,
 		p.version,
 		p.team_id,
 		t.name,

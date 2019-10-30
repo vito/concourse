@@ -113,7 +113,6 @@ func validateGroups(c Config) error {
 
 func validateResources(c Config) error {
 	errorMessages := []string{}
-
 	names := map[string]int{}
 
 	for i, resource := range c.Resources {
@@ -149,7 +148,6 @@ func validateResources(c Config) error {
 
 func validateResourceTypes(c Config) error {
 	errorMessages := []string{}
-
 	names := map[string]int{}
 
 	for i, resourceType := range c.ResourceTypes {
@@ -213,7 +211,6 @@ func usedResources(c Config) map[string]bool {
 func validateJobs(c Config) ([]ConfigWarning, error) {
 	errorMessages := []string{}
 	warnings := []ConfigWarning{}
-
 	names := map[string]int{}
 
 	for i, job := range c.Jobs {

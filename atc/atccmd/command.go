@@ -998,7 +998,7 @@ func (cmd *RunCommand) constructGCMember(
 		atc.ComponentCollectorVolumes:           gc.NewVolumeCollector(dbVolumeRepository, cmd.GC.MissingGracePeriod),
 		atc.ComponentCollectorContainers:        gc.NewContainerCollector(dbContainerRepository, jobRunner, cmd.GC.MissingGracePeriod),
 		atc.ComponentCollectorCheckSessions:     gc.NewResourceConfigCheckSessionCollector(resourceConfigCheckSessionLifecycle),
-		atc.ComponentCollectorVarSources:        creds.VarSourcePoolInstance(),
+		atc.ComponentCollectorVarSources:        gc.NewCollectorTask(creds.VarSourcePoolInstance()),
 	}
 
 	for collectorName, collector := range collectors {
