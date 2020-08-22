@@ -163,7 +163,7 @@ var _ = Describe("ResourceCacheLifecycle", func() {
 										},
 									},
 								},
-								ResourceTypes: atc.ResourceTypeConfigs{
+								ResourceTypes: atc.ResourceTypes{
 									{
 										Name: "some-type",
 										Type: "some-base-resource-type",

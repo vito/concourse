@@ -21,7 +21,7 @@ var _ = Describe("ResourceType", func() {
 		pipeline, created, err = defaultTeam.SavePipeline(
 			"pipeline-with-types",
 			atc.Config{
-				ResourceTypes: atc.ResourceTypeConfigs{
+				ResourceTypes: atc.ResourceTypes{
 					{
 						Name:   "some-type",
 						Type:   "registry-image",
@@ -109,7 +109,7 @@ var _ = Describe("ResourceType", func() {
 				pipeline, created, err = defaultTeam.SavePipeline(
 					"pipeline-with-types",
 					atc.Config{
-						ResourceTypes: atc.ResourceTypeConfigs{
+						ResourceTypes: atc.ResourceTypes{
 							{
 								Name:   "some-type",
 								Type:   "registry-image",
@@ -147,7 +147,7 @@ var _ = Describe("ResourceType", func() {
 								Source: atc.Source{},
 							},
 						},
-						ResourceTypes: atc.ResourceTypeConfigs{
+						ResourceTypes: atc.ResourceTypes{
 							{
 								Name:       "some-name",
 								Type:       "some-custom-type",
@@ -186,7 +186,7 @@ var _ = Describe("ResourceType", func() {
 				otherPipeline, created, err := defaultTeam.SavePipeline(
 					"pipeline-with-duplicate-type-name",
 					atc.Config{
-						ResourceTypes: atc.ResourceTypeConfigs{
+						ResourceTypes: atc.ResourceTypes{
 							{
 								Name:       "some-custom-type",
 								Type:       "some-different-foo-type",
@@ -212,7 +212,7 @@ var _ = Describe("ResourceType", func() {
 								Source: atc.Source{},
 							},
 						},
-						ResourceTypes: atc.ResourceTypeConfigs{
+						ResourceTypes: atc.ResourceTypes{
 							{
 								Name:   "registry-image",
 								Type:   "registry-image",

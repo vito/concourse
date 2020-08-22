@@ -142,7 +142,7 @@ var _ = Describe("Pipeline", func() {
 					Source: atc.Source{"some": "source"},
 				},
 			},
-			ResourceTypes: atc.ResourceTypeConfigs{
+			ResourceTypes: atc.ResourceTypes{
 				{
 					Name:   "some-other-resource-type",
 					Type:   "base-type",
@@ -278,7 +278,7 @@ var _ = Describe("Pipeline", func() {
 
 			resourceTypeConfigs := resourceTypes.Configs()
 
-			emptyResourceTypeConfigs := atc.ResourceTypeConfigs{
+			emptyResourceTypeConfigs := atc.ResourceTypes{
 				{Name: "some-other-resource-type", Type: "base-type"},
 				{Name: "some-resource-type", Type: "base-type"},
 			}
@@ -476,7 +476,7 @@ var _ = Describe("Pipeline", func() {
 					},
 				},
 
-				ResourceTypes: atc.ResourceTypeConfigs{
+				ResourceTypes: atc.ResourceTypes{
 					{
 						Name: "some-resource-type",
 						Type: "some-type",

@@ -113,7 +113,7 @@ func (index ResourceIndex) FindEquivalent(obj interface{}) (interface{}, bool) {
 	return ResourceConfigs(index).Lookup(name(obj))
 }
 
-type ResourceTypeIndex ResourceTypeConfigs
+type ResourceTypeIndex ResourceTypes
 
 func (index ResourceTypeIndex) Slice() []interface{} {
 	slice := make([]interface{}, len(index))
@@ -125,7 +125,7 @@ func (index ResourceTypeIndex) Slice() []interface{} {
 }
 
 func (index ResourceTypeIndex) FindEquivalent(obj interface{}) (interface{}, bool) {
-	return ResourceTypeConfigs(index).Lookup(name(obj))
+	return ResourceTypes(index).Lookup(name(obj))
 }
 
 func groupDiffIndices(oldIndex GroupIndex, newIndex GroupIndex) Diffs {

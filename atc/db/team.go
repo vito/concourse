@@ -1387,7 +1387,7 @@ func saveResources(tx Tx, resources atc.ResourceConfigs, pipelineID int) (map[st
 	return resourceNameToID, nil
 }
 
-func saveResourceTypes(tx Tx, resourceTypes atc.ResourceTypeConfigs, pipelineID int) error {
+func saveResourceTypes(tx Tx, resourceTypes atc.ResourceTypes, pipelineID int) error {
 	for _, resourceType := range resourceTypes {
 		err := saveResourceType(tx, resourceType, pipelineID)
 		if err != nil {
