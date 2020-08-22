@@ -37,7 +37,7 @@ import Html.Lazy
 import Keyboard
 import Login.Login as Login
 import Maybe.Extra
-import Message.Message exposing (DomID(..), Message(..))
+import Message.Message exposing (DomID(..), Message(..), PipelinesSection(..))
 import RemoteData exposing (WebData)
 import Routes exposing (Highlight)
 import ScreenSize
@@ -89,7 +89,7 @@ main =
         Benchmark.describe "benchmark suite"
             [ Benchmark.compare "DashboardPreview.view"
                 "current"
-                (\_ -> DP.view HoverState.NoHover (DP.groupByRank sampleJobs))
+                (\_ -> DP.view AllPipelinesSection HoverState.NoHover (DP.groupByRank sampleJobs))
                 "old"
                 (\_ -> dashboardPreviewView sampleJobs)
             , Benchmark.compare "Build.view"
@@ -134,7 +134,7 @@ buildView session model =
             [ SideBar.hamburgerMenu session
             , TopBar.concourseLogo
             , breadcrumbs model
-            , Login.view session.userState model False
+            , Login.view session.userState model
             ]
         , Html.div
             (id "page-below-top-bar" :: Views.Styles.pageBelowTopBar route)

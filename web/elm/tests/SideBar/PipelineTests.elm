@@ -8,7 +8,7 @@ import Data
 import Expect
 import HoverState exposing (TooltipPosition(..))
 import Html exposing (Html)
-import Message.Message exposing (DomID(..), Message, SideBarSection(..))
+import Message.Message exposing (DomID(..), Message, PipelinesSection(..))
 import Set
 import SideBar.Pipeline as Pipeline
 import SideBar.Styles as Styles
@@ -47,15 +47,15 @@ all =
                                 , opacity = Styles.Bright
                                 }
                 , describe "when not favorited"
-                    [ test "displays an unfilled star icon" <|
+                    [ test "displays a dim unfilled star icon" <|
                         \_ ->
                             pipeline
                                 |> viewPipeline { defaultState | active = True, hovered = True }
                                 |> .starIcon
-                                |> Expect.equal { opacity = Styles.Bright, filled = False }
+                                |> Expect.equal { opacity = Styles.Dim, filled = False }
                     ]
                 , describe "when favorited"
-                    [ test "displays a filled star icon" <|
+                    [ test "displays a bright filled star icon" <|
                         \_ ->
                             pipeline
                                 |> viewPipeline
@@ -160,11 +160,7 @@ all =
                         |> viewPipeline { defaultState | isFavoritesSection = False }
                         |> .domID
                         |> Expect.equal
-                            (SideBarPipeline AllPipelines
-                                { teamName = "team"
-                                , pipelineName = "pipeline"
-                                }
-                            )
+                            (SideBarPipeline AllPipelinesSection Data.pipelineId)
             ]
         , describe "when in favorites section"
             [ test "domID is for Favorites section" <|
@@ -173,11 +169,7 @@ all =
                         |> viewPipeline { defaultState | isFavoritesSection = True }
                         |> .domID
                         |> Expect.equal
-                            (SideBarPipeline Favorites
-                                { teamName = "team"
-                                , pipelineName = "pipeline"
-                                }
-                            )
+                            (SideBarPipeline FavoritesSection Data.pipelineId)
             ]
         ]
 
@@ -192,21 +184,16 @@ viewPipeline :
     -> Views.Pipeline
 viewPipeline { active, hovered, favorited, isFavoritesSection } p =
     let
-        pipelineIdentifier =
-            { teamName = "team"
-            , pipelineName = "pipeline"
-            }
-
         hoveredDomId =
             if hovered then
-                HoverState.Hovered (SideBarPipeline AllPipelines pipelineIdentifier)
+                HoverState.Hovered (SideBarPipeline AllPipelinesSection Data.pipelineId)
 
             else
                 HoverState.NoHover
 
         activePipeline =
             if active then
-                Just pipelineIdentifier
+                Just Data.pipelineId
 
             else
                 Nothing

@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 
@@ -45,7 +46,7 @@ var _ = Describe("CheckBuildReadAccessHandler", func() {
 	})
 
 	JustBeforeEach(func() {
-		fakeAccessor.CreateReturns(fakeaccess)
+		fakeAccessor.CreateReturns(fakeaccess, nil)
 		server = httptest.NewServer(handler)
 
 		request, err := http.NewRequest("POST", server.URL+"?:build_id=55", nil)
@@ -109,9 +110,6 @@ var _ = Describe("CheckBuildReadAccessHandler", func() {
 				"some-action",
 				innerHandler,
 				fakeAccessor,
-				new(accessorfakes.FakeTokenVerifier),
-				new(accessorfakes.FakeTeamFetcher),
-				new(accessorfakes.FakeUserTracker),
 				new(auditorfakes.FakeAuditor),
 				map[string]string{},
 			)
@@ -228,9 +226,6 @@ var _ = Describe("CheckBuildReadAccessHandler", func() {
 				"some-action",
 				innerHandler,
 				fakeAccessor,
-				new(accessorfakes.FakeTokenVerifier),
-				new(accessorfakes.FakeTeamFetcher),
-				new(accessorfakes.FakeUserTracker),
 				new(auditorfakes.FakeAuditor),
 				map[string]string{},
 			)
@@ -262,7 +257,7 @@ var _ = Describe("CheckBuildReadAccessHandler", func() {
 						pipeline.JobReturns(fakeJob, true, nil)
 					})
 
-					It("returns "+string(status), func() {
+					It("returns "+fmt.Sprint(status), func() {
 						Expect(response.StatusCode).To(Equal(status))
 					})
 				})
@@ -294,7 +289,7 @@ var _ = Describe("CheckBuildReadAccessHandler", func() {
 					build.PipelineReturns(pipeline, true, nil)
 				})
 
-				It("returns "+string(status), func() {
+				It("returns "+fmt.Sprint(status), func() {
 					Expect(response.StatusCode).To(Equal(status))
 				})
 			})

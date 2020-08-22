@@ -59,13 +59,14 @@ type TaskDelegate interface {
 	Stdout() io.Writer
 	Stderr() io.Writer
 
-	Variables() vars.CredVarsTracker
+	Variables() *vars.BuildVariables
 
 	SetTaskConfig(config atc.TaskConfig)
 
 	Initializing(lager.Logger)
 	Starting(lager.Logger)
 	Finished(lager.Logger, ExitStatus)
+	SelectedWorker(lager.Logger, string)
 	Errored(lager.Logger, string)
 }
 

@@ -3,7 +3,7 @@ module SideBar.Pipeline exposing (pipeline)
 import Assets
 import Concourse
 import HoverState
-import Message.Message exposing (DomID(..), Message(..), SideBarSection(..))
+import Message.Message exposing (DomID(..), Message(..), PipelinesSection(..))
 import Routes
 import Set exposing (Set)
 import SideBar.Styles as Styles
@@ -42,15 +42,18 @@ pipeline params p =
         domID =
             SideBarPipeline
                 (if params.isFavoritesSection then
-                    Favorites
+                    FavoritesSection
 
                  else
-                    AllPipelines
+                    AllPipelinesSection
                 )
                 pipelineId
 
         isHovered =
             HoverState.isHovered domID params.hovered
+
+        isFavorited =
+            Set.member p.id params.favoritedPipelines
     in
     { icon =
         { asset =
@@ -96,12 +99,12 @@ pipeline params p =
     , domID = domID
     , starIcon =
         { opacity =
-            if isCurrent || isHovered then
+            if isFavorited then
                 Styles.Bright
 
             else
                 Styles.Dim
-        , filled = Set.member p.id params.favoritedPipelines
+        , filled = isFavorited
         }
     , id = p.id
     }

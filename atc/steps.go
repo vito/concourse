@@ -1,6 +1,7 @@
 package atc
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,38 +19,42 @@ type Step struct {
 // ErrNoStepConfigured is returned when a step does not have any keys that
 // indicate its step type.
 var ErrNoStepConfigured = errors.New("no step configured")
+var ErrNoCoreStepDeclared = errors.New("no core step type declared (e.g. get, put, task, etc.)")
 
 // UnmarshalJSON unmarshals step configuration in multiple passes, determining
 // precedence by the order of StepDetectors listed in the StepPrecedence
 // variable.
 //
-// First, the data is unmarshalled into a map[string]*json.RawMessage. Next,
-// UnmarshalJSON loops over StepPrecedence.
+// First, the step data is unmarshalled into a map[string]*json.RawMessage. Next,
+// UnmarshalJSON loops over StepPrecedence to determine the type of step.
 //
 // For any StepDetector with a .Key field present in the map, .New is called to
-// construct an empty StepConfig, and then .ParseJSON is called on it to parse
-// the data. For step modifiers like `timeout:' and `attempts:', this will be a
-// non-strict parse that only parses their fields, ignoring the rest. For core
-// step types, this will be a strict parse, raising an error on any unknown
-// fields.
+// construct an empty StepConfig, and then json.Unmarshal is called on it to parse
+// the data.
 //
-// After a step is parsed, its .Key field is removed from the map, the map is
-// re-marshalled, and the loop continues on to the rest of the StepDetectors.
-// If a step was previously parsed, .Wrap will be called with the resulting
-// step.
+// For step modifiers like `timeout:` and `attempts:` they eventuallly wrap a
+// core step type (e.g. get, put, task etc.). Core step types do not wrap other
+// steps.
+//
+// When a core step type is encountered parsing stops and any remaining keys in
+// rawStepConfig are considered invalid. This is how we stop someone from
+// putting a `get` and `put` in the same step while still allowing valid step
+// modifiers. This is also why step modifiers are listed first in
+// StepPrecedence.
 //
 // If no StepDetectors match, no step is parsed, ErrNoStepConfigured is
 // returned.
 func (step *Step) UnmarshalJSON(data []byte) error {
-	var deferred map[string]*json.RawMessage
-	err := json.Unmarshal(data, &deferred)
+	var rawStepConfig map[string]*json.RawMessage
+	err := json.Unmarshal(data, &rawStepConfig)
 	if err != nil {
 		return err
 	}
 
 	var prevStep StepWrapper
+	var coreStepDeclared bool
 	for _, s := range StepPrecedence {
-		_, found := deferred[s.Key]
+		_, found := rawStepConfig[s.Key]
 		if !found {
 			continue
 		}
@@ -72,17 +77,18 @@ func (step *Step) UnmarshalJSON(data []byte) error {
 			prevStep.Wrap(curStep)
 		}
 
-		deleteKeys(deferred, curStep)
+		deleteKnownFields(rawStepConfig, curStep)
 
 		if wrapper, isWrapper := curStep.(StepWrapper); isWrapper {
 			prevStep = wrapper
 		} else {
+			coreStepDeclared = true
 			break
 		}
 
-		data, err = json.Marshal(deferred)
+		data, err = json.Marshal(rawStepConfig)
 		if err != nil {
-			return fmt.Errorf("re-marshal deferred parsing: %w", err)
+			return fmt.Errorf("re-marshal rawStepConfig parsing: %w", err)
 		}
 	}
 
@@ -90,8 +96,12 @@ func (step *Step) UnmarshalJSON(data []byte) error {
 		return ErrNoStepConfigured
 	}
 
-	if len(deferred) != 0 {
-		step.UnknownFields = deferred
+	if !coreStepDeclared {
+		return ErrNoCoreStepDeclared
+	}
+
+	if len(rawStepConfig) != 0 {
+		step.UnknownFields = rawStepConfig
 	}
 
 	return nil
@@ -126,7 +136,7 @@ func (step Step) MarshalJSON() ([]byte, error) {
 }
 
 // See the note about json tags here: https://golang.org/pkg/encoding/json/#Marshal
-func deleteKeys(deferred map[string]*json.RawMessage, step StepConfig) {
+func deleteKnownFields(rawStepConfig map[string]*json.RawMessage, step StepConfig) {
 	stepType := reflect.TypeOf(step).Elem()
 	for i := 0; i < stepType.NumField(); i++ {
 		field := stepType.Field(i)
@@ -142,7 +152,7 @@ func deleteKeys(deferred map[string]*json.RawMessage, step StepConfig) {
 		if jsonKey == "" {
 			jsonKey = field.Name
 		}
-		delete(deferred, jsonKey)
+		delete(rawStepConfig, jsonKey)
 	}
 }
 
@@ -158,13 +168,13 @@ type StepConfig interface {
 }
 
 // StepWrapper is an optional interface for step types that is implemented by
-// steps that wrap other steps (e.g. hooks like `on_success`, `timeout`, etc.)
+// steps that wrap/modify other steps (e.g. hooks like `on_success`, `timeout`, etc.)
 type StepWrapper interface {
 	// Wrap is called during (Step).UnmarshalJSON whenever an 'inner' step is
 	// parsed.
 	//
-	// Modifier step types should implement this by assigning to an internal
-	// field that has a `json:"-"` struct tag.
+	// Modifier step types should implement this function by assigning the
+	// passed in StepConfig to an internal field that has a `json:"-"` tag.
 	Wrap(StepConfig)
 
 	// Unwrap is called during (Step).MarshalJSON and must return the wrapped
@@ -188,6 +198,7 @@ type StepVisitor interface {
 	VisitDo(*DoStep) error
 	VisitInParallel(*InParallelStep) error
 	VisitAggregate(*AggregateStep) error
+	VisitAcross(*AcrossStep) error
 	VisitTimeout(*TimeoutStep) error
 	VisitRetry(*RetryStep) error
 	VisitOnSuccess(*OnSuccessStep) error
@@ -231,6 +242,10 @@ var StepPrecedence = []StepDetector{
 	{
 		Key: "on_success",
 		New: func() StepConfig { return &OnSuccessStep{} },
+	},
+	{
+		Key: "across",
+		New: func() StepConfig { return &AcrossStep{} },
 	},
 	{
 		Key: "attempts",
@@ -453,6 +468,47 @@ func (c *InParallelConfig) UnmarshalJSON(payload []byte) error {
 	return nil
 }
 
+type AcrossVarConfig struct {
+	Var         string             `json:"var"`
+	Values      []interface{}      `json:"values,omitempty"`
+	MaxInFlight *MaxInFlightConfig `json:"max_in_flight,omitempty"`
+}
+
+func (config *AcrossVarConfig) UnmarshalJSON(data []byte) error {
+	// Used to avoid infinite recursion when unmarshalling.
+	type target AcrossVarConfig
+
+	var t target
+	if err := unmarshalStrict(data, &t); err != nil {
+		return err
+	}
+
+	*config = AcrossVarConfig(t)
+	return nil
+}
+
+type AcrossStep struct {
+	Step     StepConfig        `json:"-"`
+	Vars     []AcrossVarConfig `json:"across"`
+	FailFast bool              `json:"fail_fast,omitempty"`
+}
+
+func (step *AcrossStep) ParseJSON(data []byte) error {
+	return json.Unmarshal(data, step)
+}
+
+func (step *AcrossStep) Visit(v StepVisitor) error {
+	return v.VisitAcross(step)
+}
+
+func (step *AcrossStep) Wrap(sub StepConfig) {
+	step.Step = sub
+}
+
+func (step *AcrossStep) Unwrap() StepConfig {
+	return step.Step
+}
+
 type RetryStep struct {
 	Step     StepConfig `json:"-"`
 	Attempts int        `json:"attempts"`
@@ -575,6 +631,44 @@ func (step *EnsureStep) Visit(v StepVisitor) error {
 	return v.VisitEnsure(step)
 }
 
+// MaxInFlightConfig can represent either running all values in an AcrossStep
+// in parallel or a applying a limit to the sub-steps that can run at once.
+type MaxInFlightConfig struct {
+	All   bool
+	Limit int
+}
+
+const MaxInFlightAll = "all"
+
+func (c *MaxInFlightConfig) UnmarshalJSON(version []byte) error {
+	if bytes.HasPrefix(version, []byte{'"'}) {
+		var data string
+		err := json.Unmarshal(version, &data)
+		if err != nil {
+			return err
+		}
+		if data != MaxInFlightAll {
+			return fmt.Errorf("invalid max_in_flight %q", data)
+		}
+		c.All = true
+		return nil
+	}
+	err := json.Unmarshal(version, &c.Limit)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *MaxInFlightConfig) MarshalJSON() ([]byte, error) {
+	if c.All {
+		return json.Marshal(MaxInFlightAll)
+	}
+
+	return json.Marshal(c.Limit)
+}
+
 // A VersionConfig represents the choice to include every version of a
 // resource, the latest version of a resource, or a pinned (specific) one.
 type VersionConfig struct {
@@ -691,4 +785,10 @@ func (c InputsConfig) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal("")
+}
+
+func unmarshalStrict(data []byte, to interface{}) error {
+	decoder := json.NewDecoder(bytes.NewBuffer(data))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(to)
 }

@@ -19,10 +19,11 @@ type BuildStepDelegate interface {
 	Stdout() io.Writer
 	Stderr() io.Writer
 
-	Variables() vars.CredVarsTracker
+	Variables() *vars.BuildVariables
 
 	Initializing(lager.Logger)
 	Starting(lager.Logger)
 	Finished(lager.Logger, bool)
+	SelectedWorker(lager.Logger, string)
 	Errored(lager.Logger, string)
 }

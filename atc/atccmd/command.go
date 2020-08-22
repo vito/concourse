@@ -61,10 +61,11 @@ import (
 	"github.com/concourse/concourse/web"
 	"github.com/concourse/flag"
 	"github.com/concourse/retryhttp"
+	"gopkg.in/square/go-jose.v2/jwt"
 
 	"github.com/cppforlife/go-semi-semantic/version"
-	multierror "github.com/hashicorp/go-multierror"
-	flags "github.com/jessevdk/go-flags"
+	"github.com/hashicorp/go-multierror"
+	"github.com/jessevdk/go-flags"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/tedsuo/ifrit"
 	"github.com/tedsuo/ifrit/grouper"
@@ -103,7 +104,6 @@ var flyClientSecret = "Zmx5"
 
 var workerAvailabilityPollingInterval = 5 * time.Second
 var workerStatusPublishInterval = 1 * time.Minute
-var BatcherInterval = 15 * time.Second
 
 type ATCCommand struct {
 	RunCommand RunCommand `command:"run"`
@@ -145,8 +145,6 @@ type RunCommand struct {
 	DebugBindPort uint16  `long:"debug-bind-port" default:"8079"      description:"Port on which to listen for the pprof debugger endpoints."`
 
 	InterceptIdleTimeout time.Duration `long:"intercept-idle-timeout" default:"0m" description:"Length of time for a intercepted session to be idle before terminating."`
-
-	EnableGlobalResources bool `long:"enable-global-resources" description:"Enable equivalent resources across pipelines and teams to share a single version history."`
 
 	ComponentRunnerInterval time.Duration `long:"component-runner-interval" default:"10s" description:"Interval on which runners are kicked off for builds, locks, scans, and checks"`
 
@@ -240,15 +238,17 @@ type RunCommand struct {
 		MainTeamFlags skycmd.AuthTeamFlags `group:"Authentication (Main Team)" namespace:"main-team"`
 	} `group:"Authentication"`
 
-	EnableRedactSecrets bool `long:"enable-redact-secrets" description:"Enable redacting secrets in build logs."`
-
 	ConfigRBAC flag.File `long:"config-rbac" description:"Customize RBAC role-action mapping."`
 
-	SystemClaimKey        string   `long:"system-claim-key" default:"aud" description:"The token claim key to use when matching system-claim-values"`
-	SystemClaimValues     []string `long:"system-claim-value" default:"concourse-worker" description:"Configure which token requests should be considered 'system' requests."`
-	EnableArchivePipeline bool     `long:"enable-archive-pipeline" description:"Enable /api/v1/teams/{team}/pipelines/{pipeline}/archive endpoint."`
+	SystemClaimKey    string   `long:"system-claim-key" default:"aud" description:"The token claim key to use when matching system-claim-values"`
+	SystemClaimValues []string `long:"system-claim-value" default:"concourse-worker" description:"Configure which token requests should be considered 'system' requests."`
 
-	EnableBuildRerunWhenWorkerDisappears bool `long:"enable-rerun-when-worker-disappears" description:"Enable automatically build rerun when worker disappears"`
+	FeatureFlags struct {
+		EnableGlobalResources                bool `long:"enable-global-resources" description:"Enable equivalent resources across pipelines and teams to share a single version history."`
+		EnableRedactSecrets                  bool `long:"enable-redact-secrets" description:"Enable redacting secrets in build logs."`
+		EnableBuildRerunWhenWorkerDisappears bool `long:"enable-rerun-when-worker-disappears" description:"Enable automatically build rerun when worker disappears or a network error occurs"`
+		EnableAcrossStep                     bool `long:"enable-across-step" description:"Enable the experimental across step to be used in jobs. The API is subject to change."`
+	} `group:"Feature Flags"`
 }
 
 type Migration struct {
@@ -399,7 +399,7 @@ func (cmd *RunCommand) WireDynamicFlags(commandFlags *flags.Command) {
 	}
 	cmd.CredentialManagers = managerConfigs
 
-	metric.WireEmitters(metricsGroup)
+	metric.Metrics.WireEmitters(metricsGroup)
 
 	policy.WireCheckers(policyChecksGroup)
 
@@ -445,7 +445,10 @@ func (cmd *RunCommand) Runner(positionalArguments []string) (ifrit.Runner, error
 		"duration": time.Now().Sub(startTime),
 	})
 
-	atc.EnableGlobalResources = cmd.EnableGlobalResources
+	atc.EnableGlobalResources = cmd.FeatureFlags.EnableGlobalResources
+	atc.EnableRedactSecrets = cmd.FeatureFlags.EnableRedactSecrets
+	atc.EnableBuildRerunWhenWorkerDisappears = cmd.FeatureFlags.EnableBuildRerunWhenWorkerDisappears
+	atc.EnableAcrossStep = cmd.FeatureFlags.EnableAcrossStep
 
 	//FIXME: These only need to run once for the entire binary. At the moment,
 	//they rely on state of the command.
@@ -457,7 +460,10 @@ func (cmd *RunCommand) Runner(positionalArguments []string) (ifrit.Runner, error
 
 	// Register the sink that collects error metrics
 	if cmd.Metrics.CaptureErrorMetrics {
-		errorSinkCollector := metric.NewErrorSinkCollector(logger)
+		errorSinkCollector := metric.NewErrorSinkCollector(
+			logger,
+			metric.Metrics,
+		)
 		logger.RegisterSink(&errorSinkCollector)
 	}
 
@@ -524,6 +530,7 @@ func (cmd *RunCommand) Runner(positionalArguments []string) (ifrit.Runner, error
 		Name: "periodic-metrics",
 		Runner: metric.PeriodicallyEmit(
 			logger.Session("periodic-metrics"),
+			metric.Metrics,
 			10*time.Second,
 		),
 	})
@@ -718,12 +725,23 @@ func (cmd *RunCommand) constructAPIMembers(
 	gcContainerDestroyer := gc.NewDestroyer(logger, dbContainerRepository, dbVolumeRepository)
 	dbBuildFactory := db.NewBuildFactory(dbConn, lockFactory, cmd.GC.OneOffBuildGracePeriod, cmd.GC.FailedGracePeriod)
 	dbCheckFactory := db.NewCheckFactory(dbConn, lockFactory, secretManager, cmd.varSourcePool, cmd.GlobalResourceCheckTimeout)
+	dbAccessTokenFactory := db.NewAccessTokenFactory(dbConn)
 	dbClock := db.NewClock()
 	dbWall := db.NewWall(dbConn, &dbClock)
 
-	tokenVerifier := cmd.constructTokenVerifier(httpClient)
+	tokenVerifier := cmd.constructTokenVerifier(dbAccessTokenFactory)
+
+	teamsCacher := accessor.NewTeamsCacher(
+		logger,
+		dbConn.Bus(),
+		teamFactory,
+		time.Minute,
+		time.Minute,
+	)
 
 	accessFactory := accessor.NewAccessFactory(
+		tokenVerifier,
+		teamsCacher,
 		cmd.SystemClaimKey,
 		cmd.SystemClaimValues,
 	)
@@ -750,8 +768,6 @@ func (cmd *RunCommand) constructAPIMembers(
 		credsManagers,
 		accessFactory,
 		dbWall,
-		tokenVerifier,
-		dbConn.Bus(),
 		policyChecker,
 	)
 	if err != nil {
@@ -766,6 +782,8 @@ func (cmd *RunCommand) constructAPIMembers(
 	authHandler, err := cmd.constructAuthHandler(
 		logger,
 		storage,
+		dbAccessTokenFactory,
+		userFactory,
 	)
 	if err != nil {
 		return nil, err
@@ -902,6 +920,7 @@ func (cmd *RunCommand) backendComponents(
 	dbPipelineFactory := db.NewPipelineFactory(dbConn, lockFactory)
 	dbJobFactory := db.NewJobFactory(dbConn, lockFactory)
 	dbCheckableCounter := db.NewCheckableCounter(dbConn)
+	dbPipelineLifecycle := db.NewPipelineLifecycle(dbConn, lockFactory)
 
 	alg := algorithm.New(db.NewVersionsDB(dbConn, algorithmLimitRows, schedulerCache))
 
@@ -1049,6 +1068,7 @@ func (cmd *RunCommand) backendComponents(
 			},
 			Runnable: gc.NewBuildLogCollector(
 				dbPipelineFactory,
+				dbPipelineLifecycle,
 				500,
 				gc.NewBuildLogRetentionCalculator(
 					cmd.DefaultBuildLogsToRetain,
@@ -1090,9 +1110,11 @@ func (cmd *RunCommand) gcComponents(
 	dbContainerRepository := db.NewContainerRepository(gcConn)
 	dbArtifactLifecycle := db.NewArtifactLifecycle(gcConn)
 	dbCheckLifecycle := db.NewCheckLifecycle(gcConn)
+	dbAccessTokenLifecycle := db.NewAccessTokenLifecycle(gcConn)
 	resourceConfigCheckSessionLifecycle := db.NewResourceConfigCheckSessionLifecycle(gcConn)
 	dbBuildFactory := db.NewBuildFactory(gcConn, lockFactory, cmd.GC.OneOffBuildGracePeriod, cmd.GC.FailedGracePeriod)
 	dbResourceConfigFactory := db.NewResourceConfigFactory(gcConn, lockFactory)
+	dbPipelineLifecycle := db.NewPipelineLifecycle(gcConn, lockFactory)
 
 	dbVolumeRepository := db.NewVolumeRepository(gcConn)
 
@@ -1107,6 +1129,8 @@ func (cmd *RunCommand) gcComponents(
 		atc.ComponentCollectorVolumes:           gc.NewVolumeCollector(dbVolumeRepository, cmd.GC.MissingGracePeriod),
 		atc.ComponentCollectorContainers:        gc.NewContainerCollector(dbContainerRepository, cmd.GC.MissingGracePeriod, cmd.GC.HijackGracePeriod),
 		atc.ComponentCollectorCheckSessions:     gc.NewResourceConfigCheckSessionCollector(resourceConfigCheckSessionLifecycle),
+		atc.ComponentCollectorPipelines:         gc.NewPipelineCollector(dbPipelineLifecycle),
+		atc.ComponentCollectorAccessTokens:      gc.NewAccessTokensCollector(dbAccessTokenLifecycle, jwt.DefaultLeeway),
 	}
 
 	var components []RunnableComponent
@@ -1250,7 +1274,7 @@ func (cmd *RunCommand) constructWebHandler(logger lager.Logger) (http.Handler, e
 	if err != nil {
 		return nil, err
 	}
-	return metric.WrapHandler(logger, "web", webHandler), nil
+	return metric.WrapHandler(logger, metric.Metrics, "web", webHandler), nil
 }
 
 func (cmd *RunCommand) skyHttpClient() (*http.Client, error) {
@@ -1449,7 +1473,7 @@ func (cmd *RunCommand) configureMetrics(logger lager.Logger) error {
 		host, _ = os.Hostname()
 	}
 
-	return metric.Initialize(logger.Session("metrics"), host, cmd.Metrics.Attributes, cmd.Metrics.BufferSize)
+	return metric.Metrics.Initialize(logger.Session("metrics"), host, cmd.Metrics.Attributes, cmd.Metrics.BufferSize)
 }
 
 func (cmd *RunCommand) constructDBConn(
@@ -1466,7 +1490,7 @@ func (cmd *RunCommand) constructDBConn(
 
 	// Instrument with Metrics
 	dbConn = metric.CountQueries(dbConn)
-	metric.Databases = append(metric.Databases, dbConn)
+	metric.Metrics.Databases = append(metric.Metrics.Databases, dbConn)
 
 	// Instrument with Logging
 	if cmd.LogDBQueries {
@@ -1567,7 +1591,6 @@ func (cmd *RunCommand) constructEngine(
 		defaultLimits,
 		strategy,
 		lockFactory,
-		cmd.EnableBuildRerunWhenWorkerDisappears,
 	)
 
 	stepBuilder := builder.NewStepBuilder(
@@ -1576,7 +1599,6 @@ func (cmd *RunCommand) constructEngine(
 		cmd.ExternalURL.String(),
 		secretManager,
 		cmd.varSourcePool,
-		cmd.EnableRedactSecrets,
 	)
 
 	return engine.NewEngine(stepBuilder)
@@ -1635,6 +1657,8 @@ func (cmd *RunCommand) constructLegacyHandler(
 func (cmd *RunCommand) constructAuthHandler(
 	logger lager.Logger,
 	storage storage.Storage,
+	accessTokenFactory db.AccessTokenFactory,
+	userFactory db.UserFactory,
 ) (http.Handler, error) {
 
 	issuerPath, _ := url.Parse("/sky/issuer")
@@ -1661,7 +1685,14 @@ func (cmd *RunCommand) constructAuthHandler(
 		return nil, err
 	}
 
-	return dexServer, nil
+	return token.StoreAccessToken(
+		logger.Session("dex-server"),
+		dexServer,
+		token.Factory{},
+		token.NewClaimsParser(),
+		accessTokenFactory,
+		userFactory,
+	), nil
 }
 
 func (cmd *RunCommand) constructLoginHandler(
@@ -1695,6 +1726,7 @@ func (cmd *RunCommand) constructLoginHandler(
 	skyServer, err := skyserver.NewSkyServer(&skyserver.SkyConfig{
 		Logger:          logger.Session("sky"),
 		TokenMiddleware: middleware,
+		TokenParser:     token.Factory{},
 		OAuthConfig:     oauth2Config,
 		HTTPClient:      httpClient,
 	})
@@ -1705,17 +1737,17 @@ func (cmd *RunCommand) constructLoginHandler(
 	return skyserver.NewSkyHandler(skyServer), nil
 }
 
-func (cmd *RunCommand) constructTokenVerifier(httpClient *http.Client) accessor.TokenVerifier {
-
-	publicKeyPath, _ := url.Parse("/sky/issuer/keys")
-	publicKeyURL := cmd.ExternalURL.URL.ResolveReference(publicKeyPath)
+func (cmd *RunCommand) constructTokenVerifier(accessTokenFactory db.AccessTokenFactory) accessor.TokenVerifier {
 
 	validClients := []string{flyClientID}
-	for clientId, _ := range cmd.Auth.AuthFlags.Clients {
+	for clientId := range cmd.Auth.AuthFlags.Clients {
 		validClients = append(validClients, clientId)
 	}
 
-	return accessor.NewVerifier(httpClient, publicKeyURL, validClients)
+	MiB := 1024 * 1024
+	claimsCacher := accessor.NewClaimsCacher(accessTokenFactory, 1*MiB)
+
+	return accessor.NewVerifier(claimsCacher, validClients)
 }
 
 func (cmd *RunCommand) constructAPIHandler(
@@ -1738,8 +1770,6 @@ func (cmd *RunCommand) constructAPIHandler(
 	credsManagers creds.Managers,
 	accessFactory accessor.AccessFactory,
 	dbWall db.Wall,
-	tokenVerifier accessor.TokenVerifier,
-	notifications db.NotificationsBus,
 	policyChecker *policy.Checker,
 ) (http.Handler, error) {
 
@@ -1761,21 +1791,6 @@ func (cmd *RunCommand) constructAPIHandler(
 		cmd.Auditor.EnableWorkerAuditLog,
 		cmd.Auditor.EnableVolumeAuditLog,
 		logger,
-	)
-
-	batcher := accessor.NewBatcher(
-		logger,
-		dbUserFactory,
-		BatcherInterval,
-		100,
-	)
-
-	cacher := accessor.NewCacher(
-		logger,
-		notifications,
-		teamFactory,
-		time.Minute,
-		time.Minute,
 	)
 
 	customRoles, err := cmd.parseCustomRoles()
@@ -1801,9 +1816,6 @@ func (cmd *RunCommand) constructAPIHandler(
 		wrappa.NewAccessorWrappa(
 			logger,
 			accessFactory,
-			tokenVerifier,
-			cacher,
-			batcher,
 			aud,
 			customRoles,
 		),
@@ -1847,8 +1859,6 @@ func (cmd *RunCommand) constructAPIHandler(
 		time.Minute,
 		dbWall,
 		clock.NewClock(),
-
-		cmd.EnableArchivePipeline,
 	)
 }
 

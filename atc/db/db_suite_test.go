@@ -156,7 +156,7 @@ var _ = BeforeEach(func() {
 	otherWorker, err = workerFactory.SaveWorker(otherWorkerPayload, 0)
 	Expect(err).NotTo(HaveOccurred())
 
-	defaultPipelineConfig := atc.Config{
+	defaultPipelineConfig = atc.Config{
 		Jobs: atc.JobConfigs{
 			{
 				Name: "some-job",
@@ -200,6 +200,11 @@ var _ = BeforeEach(func() {
 
 	logger = lagertest.NewTestLogger("test")
 })
+
+func destroy(d interface{ Destroy() error }) {
+	err := d.Destroy()
+	Expect(err).ToNot(HaveOccurred())
+}
 
 var _ = AfterEach(func() {
 	err := dbConn.Close()

@@ -51,6 +51,7 @@ import Message.Message as Msgs
 import Message.Subscription as Subscription exposing (Delivery(..), Interval(..))
 import Message.TopLevelMessage as ApplicationMsgs
 import Routes
+import Set
 import Test exposing (..)
 import Test.Html.Event as Event
 import Test.Html.Query as Query
@@ -705,12 +706,7 @@ all =
                                         Just
                                             { id = 0
                                             , name = "1"
-                                            , job =
-                                                Just
-                                                    { teamName = "team"
-                                                    , pipelineName = "pipeline"
-                                                    , jobName = "job"
-                                                    }
+                                            , job = Just Data.jobId
                                             , status = BuildStatusSucceeded
                                             , duration = { startedAt = Nothing, finishedAt = Nothing }
                                             , reapTime = Nothing
@@ -1582,6 +1578,96 @@ all =
                                     [ style "flex-shrink" "0" ]
                     ]
                 ]
+            , describe "when there are favorited pipelines" <|
+                let
+                    setup params =
+                        whenOnDashboard params
+                            |> givenDataUnauthenticated
+                                (apiData [ ( "team", [] ) ])
+                            |> Tuple.first
+                            |> Application.handleCallback
+                                (Callback.AllPipelinesFetched <|
+                                    Ok
+                                        [ Data.pipeline "team" 0 |> Data.withName "pipeline" ]
+                                )
+                            |> Tuple.first
+                            |> Application.handleDelivery
+                                (Subscription.FavoritedPipelinesReceived <|
+                                    Ok <|
+                                        Set.singleton 0
+                                )
+                in
+                [ test "displays favorite pipelines header" <|
+                    \_ ->
+                        setup { highDensity = False }
+                            |> Tuple.first
+                            |> Common.queryView
+                            |> Query.has [ text "favorite pipelines" ]
+                , test "does not display header when on the HD view" <|
+                    \_ ->
+                        setup { highDensity = True }
+                            |> Tuple.first
+                            |> Common.queryView
+                            |> Query.hasNot [ text "favorite pipelines" ]
+                ]
+            , describe "when there are no favorited pipelines"
+                [ test "does not display header" <|
+                    \_ ->
+                        whenOnDashboard { highDensity = False }
+                            |> givenDataUnauthenticated
+                                (apiData [ ( "team", [] ) ])
+                            |> Tuple.first
+                            |> Application.handleCallback
+                                (Callback.AllPipelinesFetched <|
+                                    Ok
+                                        [ Data.pipeline "team" 0 |> Data.withName "pipeline" ]
+                                )
+                            |> Tuple.first
+                            |> Common.queryView
+                            |> Query.hasNot [ text "favorite pipelines" ]
+                ]
+            , describe "all pipelines header"
+                [ test "displayed when there are pipelines" <|
+                    \_ ->
+                        whenOnDashboard { highDensity = False }
+                            |> givenDataUnauthenticated
+                                (apiData [ ( "team", [] ) ])
+                            |> Tuple.first
+                            |> Application.handleCallback
+                                (Callback.AllPipelinesFetched <|
+                                    Ok
+                                        [ Data.pipeline "team" 0 |> Data.withName "pipeline" ]
+                                )
+                            |> Tuple.first
+                            |> Common.queryView
+                            |> Query.has [ text "all pipelines" ]
+                , test "displayed when there are no pipelines" <|
+                    \_ ->
+                        whenOnDashboard { highDensity = False }
+                            |> givenDataUnauthenticated
+                                (apiData [ ( "team", [] ) ])
+                            |> Tuple.first
+                            |> Application.handleCallback
+                                (Callback.AllPipelinesFetched <|
+                                    Ok []
+                                )
+                            |> Tuple.first
+                            |> Common.queryView
+                            |> Query.has [ text "all pipelines" ]
+                , test "not displayed when there are no teams" <|
+                    \_ ->
+                        whenOnDashboard { highDensity = False }
+                            |> givenDataUnauthenticated
+                                (apiData [])
+                            |> Tuple.first
+                            |> Application.handleCallback
+                                (Callback.AllPipelinesFetched <|
+                                    Ok []
+                                )
+                            |> Tuple.first
+                            |> Common.queryView
+                            |> Query.hasNot [ text "all pipelines" ]
+                ]
             , describe "info section" <|
                 let
                     info =
@@ -2027,12 +2113,29 @@ iconSelector { size, image } =
 
 whenOnDashboard : { highDensity : Bool } -> Application.Model
 whenOnDashboard { highDensity } =
-    Common.init <|
-        if highDensity then
+    Common.init
+        (if highDensity then
             "/hd"
 
-        else
+         else
             "/"
+        )
+        |> Application.handleCallback
+            (Callback.GotViewport Msgs.Dashboard <|
+                Ok <|
+                    { scene =
+                        { width = 600
+                        , height = 600
+                        }
+                    , viewport =
+                        { width = 600
+                        , height = 600
+                        , x = 0
+                        , y = 0
+                        }
+                    }
+            )
+        |> Tuple.first
 
 
 whenOnDashboardViewingAllPipelines : { highDensity : Bool } -> Application.Model
@@ -2113,12 +2216,7 @@ running j =
             Just
                 { id = 1
                 , name = "1"
-                , job =
-                    Just
-                        { teamName = "team"
-                        , pipelineName = "pipeline"
-                        , jobName = "job"
-                        }
+                , job = Just Data.jobId
                 , status = BuildStatusStarted
                 , duration =
                     { startedAt = Nothing
@@ -2149,12 +2247,7 @@ jobWithNameTransitionedAt jobName transitionedAt status =
         Just
             { id = 0
             , name = "0"
-            , job =
-                Just
-                    { teamName = "team"
-                    , pipelineName = "pipeline"
-                    , jobName = jobName
-                    }
+            , job = Just Data.jobId
             , status = status
             , duration =
                 { startedAt = Nothing
@@ -2168,12 +2261,7 @@ jobWithNameTransitionedAt jobName transitionedAt status =
                 (\t ->
                     { id = 1
                     , name = "1"
-                    , job =
-                        Just
-                            { teamName = "team"
-                            , pipelineName = "pipeline"
-                            , jobName = jobName
-                            }
+                    , job = Just Data.jobId
                     , status = status
                     , duration =
                         { startedAt = Nothing
@@ -2200,12 +2288,7 @@ circularJobs =
             Just
                 { id = 0
                 , name = "0"
-                , job =
-                    Just
-                        { teamName = "team"
-                        , pipelineName = "pipeline"
-                        , jobName = "jobA"
-                        }
+                , job = Just (Data.jobId |> Data.withJobName "jobA")
                 , status = BuildStatusSucceeded
                 , duration =
                     { startedAt = Nothing
@@ -2217,12 +2300,7 @@ circularJobs =
             Just
                 { id = 1
                 , name = "1"
-                , job =
-                    Just
-                        { teamName = "team"
-                        , pipelineName = "pipeline"
-                        , jobName = "jobA"
-                        }
+                , job = Just (Data.jobId |> Data.withJobName "jobA")
                 , status = BuildStatusSucceeded
                 , duration =
                     { startedAt = Nothing
@@ -2250,12 +2328,7 @@ circularJobs =
             Just
                 { id = 0
                 , name = "0"
-                , job =
-                    Just
-                        { teamName = "team"
-                        , pipelineName = "pipeline"
-                        , jobName = "jobB"
-                        }
+                , job = Just (Data.jobId |> Data.withJobName "jobB")
                 , status = BuildStatusSucceeded
                 , duration =
                     { startedAt = Nothing
@@ -2267,12 +2340,7 @@ circularJobs =
             Just
                 { id = 1
                 , name = "1"
-                , job =
-                    Just
-                        { teamName = "team"
-                        , pipelineName = "pipeline"
-                        , jobName = "jobB"
-                        }
+                , job = Just (Data.jobId |> Data.withJobName "jobB")
                 , status = BuildStatusSucceeded
                 , duration =
                     { startedAt = Nothing

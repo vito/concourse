@@ -13,7 +13,6 @@ module SideBar.Styles exposing
     , pipelineIcon
     , pipelineName
     , sectionHeader
-    , separator
     , sideBar
     , sideBarHandle
     , starPadding
@@ -133,7 +132,7 @@ opacityAttr opacity =
     style "opacity" <|
         case opacity of
             Dim ->
-                "0.4"
+                "0.5"
 
             GreyedOut ->
                 "0.7"
@@ -303,11 +302,7 @@ pipelineFavourite fav =
     [ style "background-image" <|
         Assets.backgroundImage <|
             Just <|
-                if fav.filled then
-                    Assets.StarIconFilled
-
-                else
-                    Assets.StarIconUnfilled
+                Assets.FavoritedToggleIcon fav.filled
     , style "background-repeat" "no-repeat"
     , style "background-position" "50% 50%"
     , style "height" <| String.fromFloat starWidth ++ "px"
@@ -317,6 +312,7 @@ pipelineFavourite fav =
     , style "padding" <| "0 " ++ String.fromFloat starPadding ++ "px"
     , style "flex-shrink" "0"
     , style "cursor" "pointer"
+    , opacityAttr fav.opacity
     , Attr.attribute "aria-label" "Favorite Icon"
     ]
 
@@ -341,12 +337,3 @@ tooltipBody =
     , style "align-items" "center"
     , style "height" "30px"
     ]
-
-
-separator : Html.Html msg
-separator =
-    Html.div
-        [ style "border-bottom" "1px solid black"
-        , style "margin-top" "10px"
-        ]
-        []

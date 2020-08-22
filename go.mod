@@ -10,7 +10,6 @@ require (
 	github.com/Azure/go-autorest/autorest v0.10.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.8.3 // indirect
 	github.com/DataDog/datadog-go v3.2.0+incompatible
-	github.com/MasterOfBinary/gobatch v0.0.0-20180929163814-711b27aab3df
 	github.com/Masterminds/squirrel v1.1.0
 	github.com/Microsoft/hcsshim v0.8.7 // indirect
 	github.com/NYTimes/gziphandler v1.1.1
@@ -20,8 +19,8 @@ require (
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/cloudfoundry/go-socks5 v0.0.0-20180221174514-54f73bdb8a8e // indirect
 	github.com/cloudfoundry/socks5-proxy v0.0.0-20180530211953-3659db090cb2 // indirect
-	github.com/concourse/baggageclaim v1.7.0
-	github.com/concourse/dex v0.0.0-20200417202922-dcbe94f28c88
+	github.com/concourse/baggageclaim v1.8.0
+	github.com/concourse/dex v0.0.0-20200730150203-821b48abfd88
 	github.com/concourse/flag v1.1.0
 	github.com/concourse/go-archive v1.0.1
 	github.com/concourse/retryhttp v1.0.2
@@ -37,7 +36,6 @@ require (
 	github.com/cppforlife/go-semi-semantic v0.0.0-20160921010311-576b6af77ae4
 	github.com/creack/pty v1.1.9 // indirect
 	github.com/cyberark/conjur-api-go v0.6.0
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
@@ -47,7 +45,7 @@ require (
 	github.com/gobuffalo/packr v1.13.7
 	github.com/gogo/googleapis v1.3.1 // indirect
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9 // indirect
+	github.com/golang/groupcache v0.0.0-20191027212112-611e8accdfc9
 	github.com/google/jsonapi v0.0.0-20180618021926-5d047c6bc66b
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gophercloud/gophercloud v0.10.0 // indirect

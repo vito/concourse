@@ -292,11 +292,7 @@ all =
                     (ApplicationMsgs.Update <|
                         Msgs.GoToRoute
                             (Routes.Resource
-                                { id =
-                                    { teamName = "t"
-                                    , pipelineName = "p"
-                                    , resourceName = "r"
-                                    }
+                                { id = Data.shortResourceId
                                 , page = Nothing
                                 }
                             )
@@ -306,11 +302,7 @@ all =
                         [ Effects.NavigateTo <|
                             Routes.toString <|
                                 Routes.Resource
-                                    { id =
-                                        { teamName = "t"
-                                        , pipelineName = "p"
-                                        , resourceName = "r"
-                                        }
+                                    { id = Data.shortResourceId
                                     , page = Nothing
                                     }
                         ]
@@ -331,10 +323,6 @@ all =
                 )
                 [ it "has blue background" <|
                     Query.has [ style "background-color" pausedBlue ]
-                , it "draws almost-white line to the left of login container" <|
-                    Query.find [ id "login-container" ]
-                        >> Query.has
-                            [ style "border-left" <| "1px solid " ++ almostWhite ]
                 ]
             , context "when pipeline is archived"
                 (Application.handleCallback
@@ -1369,14 +1357,12 @@ all =
                         >> Tuple.first
 
                 pipelineIdentifier =
-                    { pipelineName = "p"
-                    , teamName = "t"
-                    }
+                    Data.shortPipelineId
 
                 toggleMsg =
                     ApplicationMsgs.Update <|
                         Msgs.Click <|
-                            Msgs.PipelineButton
+                            Msgs.TopBarPauseToggle
                                 pipelineIdentifier
             in
             [ defineHoverBehaviour
@@ -1412,7 +1398,7 @@ all =
                                 }
                     }
                 , hoverable =
-                    Msgs.PipelineButton { pipelineName = "p", teamName = "t" }
+                    Msgs.TopBarPauseToggle pipelineIdentifier
                 }
             , defineHoverBehaviour
                 { name = "play pipeline icon when unauthenticated"
@@ -1447,7 +1433,7 @@ all =
                                 }
                     }
                 , hoverable =
-                    Msgs.PipelineButton { pipelineName = "p", teamName = "t" }
+                    Msgs.TopBarPauseToggle pipelineIdentifier
                 }
             , defineHoverBehaviour
                 { name = "play pipeline icon when unauthorized"
@@ -1490,7 +1476,7 @@ all =
                         ]
                     }
                 , hoverable =
-                    Msgs.PipelineButton { pipelineName = "p", teamName = "t" }
+                    Msgs.TopBarPauseToggle pipelineIdentifier
                 }
             , test "clicking play button sends TogglePipelinePaused msg" <|
                 \_ ->

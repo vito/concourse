@@ -1,9 +1,9 @@
 port module Message.Effects exposing
     ( Effect(..)
+    , pipelinesSectionName
     , renderPipeline
     , renderSvgIcon
     , runEffect
-    , sideBarSectionName
     , stickyHeaderConfig
     , toHtmlID
     )
@@ -24,7 +24,7 @@ import Message.Callback exposing (Callback(..))
 import Message.Message
     exposing
         ( DomID(..)
-        , SideBarSection(..)
+        , PipelinesSection(..)
         , VersionToggleAction(..)
         , VisibilityAction(..)
         )
@@ -91,6 +91,9 @@ port renderSvgIcon : String -> Cmd msg
 port syncTextareaHeight : String -> Cmd msg
 
 
+port syncStickyBuildLogHeaders : () -> Cmd msg
+
+
 port scrollToId : ( String, String ) -> Cmd msg
 
 
@@ -101,6 +104,10 @@ type alias StickyHeaderConfig =
     , sectionClass : String
     , sectionBodyClass : String
     }
+
+
+type alias DatabaseID =
+    Int
 
 
 stickyHeaderConfig : StickyHeaderConfig
@@ -190,6 +197,7 @@ type Effect
     | GetViewportOf DomID
     | GetElement DomID
     | SyncTextareaHeight DomID
+    | SyncStickyBuildLogHeaders
     | SaveFavoritedPipelines (Set DatabaseID)
     | LoadFavoritedPipelines
 
@@ -648,14 +656,17 @@ runEffect effect key csrfToken =
         SyncTextareaHeight domID ->
             syncTextareaHeight (toHtmlID domID)
 
+        SyncStickyBuildLogHeaders ->
+            syncStickyBuildLogHeaders ()
 
-sideBarSectionName : SideBarSection -> String
-sideBarSectionName section =
+
+pipelinesSectionName : PipelinesSection -> String
+pipelinesSectionName section =
     case section of
-        Favorites ->
+        FavoritesSection ->
             "Favorites"
 
-        AllPipelines ->
+        AllPipelinesSection ->
             "AllPipelines"
 
 
@@ -663,19 +674,23 @@ toHtmlID : DomID -> String
 toHtmlID domId =
     case domId of
         SideBarTeam section t ->
-            sideBarSectionName section ++ "_" ++ Base64.encode t
+            pipelinesSectionName section ++ "_" ++ Base64.encode t
 
         SideBarPipeline section p ->
-            sideBarSectionName section ++ "_" ++ Base64.encode p.teamName ++ "_" ++ Base64.encode p.pipelineName
+            pipelinesSectionName section ++ "_" ++ Base64.encode p.teamName ++ "_" ++ Base64.encode p.pipelineName
 
-        PipelineStatusIcon p ->
-            Base64.encode p.teamName
+        PipelineStatusIcon section p ->
+            pipelinesSectionName section
+                ++ "_"
+                ++ Base64.encode p.teamName
                 ++ "_"
                 ++ Base64.encode p.pipelineName
                 ++ "_status"
 
-        VisibilityButton p ->
-            Base64.encode p.teamName
+        VisibilityButton section p ->
+            pipelinesSectionName section
+                ++ "_"
+                ++ Base64.encode p.teamName
                 ++ "_"
                 ++ Base64.encode p.pipelineName
                 ++ "_visibility"
@@ -694,6 +709,9 @@ toHtmlID domId =
 
         ResourceCommentTextarea ->
             "resource_comment"
+
+        TopBarFavoritedIcon _ ->
+            "top-bar-favorited-icon"
 
         _ ->
             ""

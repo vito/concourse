@@ -2,7 +2,7 @@ module Message.Message exposing
     ( DomID(..)
     , DropTarget(..)
     , Message(..)
-    , SideBarSection(..)
+    , PipelinesSection(..)
     , VersionId
     , VersionToggleAction(..)
     , VisibilityAction(..)
@@ -62,9 +62,12 @@ type DomID
     | PinMenuDropDown String
     | PinButton VersionId
     | PinBar
-    | PipelineStatusIcon Concourse.PipelineIdentifier
-    | PipelineButton Concourse.PipelineIdentifier
-    | VisibilityButton Concourse.PipelineIdentifier
+    | PipelineStatusIcon PipelinesSection Concourse.PipelineIdentifier
+    | PipelineCardPauseToggle PipelinesSection Concourse.PipelineIdentifier
+    | TopBarFavoritedIcon DatabaseID
+    | TopBarPauseToggle Concourse.PipelineIdentifier
+    | VisibilityButton PipelinesSection Concourse.PipelineIdentifier
+    | PipelineCardFavoritedIcon PipelinesSection DatabaseID
     | FooterCliIcon Cli.Cli
     | WelcomeCardCliIcon Cli.Cli
     | CopyTokenButton
@@ -73,6 +76,7 @@ type DomID
     | JobGroup Int
     | StepTab String Int
     | StepHeader String
+    | StepSubHeader String Int
     | ShowSearchButton
     | ClearSearchButton
     | LoginButton
@@ -83,19 +87,19 @@ type DomID
     | VersionToggle VersionId
     | BuildTab Int String
     | PipelineWrapper Concourse.PipelineIdentifier
-    | JobPreview Concourse.JobIdentifier
+    | JobPreview PipelinesSection Concourse.JobIdentifier
     | HamburgerMenu
     | SideBarResizeHandle
-    | SideBarTeam SideBarSection String
-    | SideBarPipeline SideBarSection Concourse.PipelineIdentifier
-    | SideBarStarIcon DatabaseID
+    | SideBarTeam PipelinesSection String
+    | SideBarPipeline PipelinesSection Concourse.PipelineIdentifier
+    | SideBarFavoritedIcon DatabaseID
     | Dashboard
     | DashboardGroup String
 
 
-type SideBarSection
-    = Favorites
-    | AllPipelines
+type PipelinesSection
+    = FavoritesSection
+    | AllPipelinesSection
 
 
 type VersionToggleAction
@@ -110,6 +114,10 @@ type VisibilityAction
 
 type alias VersionId =
     Concourse.VersionedResourceIdentifier
+
+
+type alias DatabaseID =
+    Int
 
 
 type DropTarget

@@ -270,6 +270,7 @@ handleCallback action ( model, effects ) =
                                     |> Endpoints.toString []
                             , eventTypes = [ "end", "event" ]
                             }
+                       , SyncStickyBuildLogHeaders
                        ]
                 )
 
@@ -331,6 +332,9 @@ handleDelivery session delivery ( model, effects ) =
 
         ClockTicked FiveSeconds _ ->
             ( model, effects ++ [ Effects.FetchAllPipelines ] )
+
+        WindowResized _ _ ->
+            ( model, effects ++ [ SyncStickyBuildLogHeaders ] )
 
         EventsReceived (Ok envelopes) ->
             let
@@ -435,7 +439,12 @@ update msg ( model, effects ) =
         Click (StepHeader id) ->
             updateOutput
                 (Build.Output.Output.handleStepTreeMsg <| StepTree.toggleStep id)
-                ( model, effects )
+                ( model, effects ++ [ SyncStickyBuildLogHeaders ] )
+
+        Click (StepSubHeader id i) ->
+            updateOutput
+                (Build.Output.Output.handleStepTreeMsg <| StepTree.toggleStepSubHeader id i)
+                ( model, effects ++ [ SyncStickyBuildLogHeaders ] )
 
         Click (StepTab id tab) ->
             updateOutput
@@ -643,7 +652,7 @@ view session model =
             [ SideBar.hamburgerMenu session
             , TopBar.concourseLogo
             , breadcrumbs model
-            , Login.view session.userState model False
+            , Login.view session.userState model
             ]
         , Html.div
             (id "page-below-top-bar" :: Views.Styles.pageBelowTopBar route)

@@ -19,7 +19,7 @@ import Html.Events exposing (onClick, onMouseDown, onMouseEnter, onMouseLeave)
 import List.Extra
 import Message.Callback exposing (Callback(..))
 import Message.Effects as Effects
-import Message.Message exposing (DomID(..), Message(..), SideBarSection(..))
+import Message.Message exposing (DomID(..), Message(..), PipelinesSection(..))
 import Message.Subscription exposing (Delivery(..))
 import RemoteData exposing (RemoteData(..), WebData)
 import ScreenSize exposing (ScreenSize(..))
@@ -30,6 +30,7 @@ import SideBar.Team as Team
 import SideBar.Views as Views
 import Tooltip
 import Views.Icon as Icon
+import Views.Styles
 
 
 type alias Model m =
@@ -61,6 +62,15 @@ update message model =
 
             else
                 Set.insert element set
+
+        toggleFavorite pipelineID =
+            let
+                favoritedPipelines =
+                    toggle pipelineID model.favoritedPipelines
+            in
+            ( { model | favoritedPipelines = favoritedPipelines }
+            , [ Effects.SaveFavoritedPipelines <| favoritedPipelines ]
+            )
     in
     case message of
         Click HamburgerMenu ->
@@ -77,7 +87,7 @@ update message model =
 
         Click (SideBarTeam section teamName) ->
             case section of
-                AllPipelines ->
+                AllPipelinesSection ->
                     ( { model
                         | expandedTeamsInAllPipelines =
                             toggle teamName model.expandedTeamsInAllPipelines
@@ -85,7 +95,7 @@ update message model =
                     , []
                     )
 
-                Favorites ->
+                FavoritesSection ->
                     ( { model
                         | collapsedTeamsInFavorites =
                             toggle teamName model.collapsedTeamsInFavorites
@@ -96,14 +106,14 @@ update message model =
         Click SideBarResizeHandle ->
             ( { model | draggingSideBar = True }, [] )
 
-        Click (SideBarStarIcon pipelineID) ->
-            let
-                favoritedPipelines =
-                    toggle pipelineID model.favoritedPipelines
-            in
-            ( { model | favoritedPipelines = favoritedPipelines }
-            , [ Effects.SaveFavoritedPipelines <| favoritedPipelines ]
-            )
+        Click (SideBarFavoritedIcon pipelineID) ->
+            toggleFavorite pipelineID
+
+        Click (PipelineCardFavoritedIcon _ pipelineID) ->
+            toggleFavorite pipelineID
+
+        Click (TopBarFavoritedIcon pipelineID) ->
+            toggleFavorite pipelineID
 
         Hover (Just (SideBarPipeline section pipelineID)) ->
             ( model
@@ -201,10 +211,7 @@ view : Model m -> Maybe (PipelineScoped a) -> Html Message
 view model currentPipeline =
     if
         model.sideBarState.isOpen
-            && not
-                (RemoteData.map List.isEmpty model.pipelines
-                    |> RemoteData.withDefault True
-                )
+            && hasVisiblePipelines model
             && (model.screenSize /= ScreenSize.Mobile)
     then
         let
@@ -274,7 +281,7 @@ allPipelinesSection model currentPipeline =
                 (\( p, ps ) ->
                     Team.team
                         { hovered = model.hovered
-                        , pipelines = p :: ps
+                        , pipelines = (p :: ps) |> List.filter (isPipelineVisible model)
                         , currentPipeline = currentPipeline
                         , favoritedPipelines = model.favoritedPipelines
                         , isFavoritesSection = False
@@ -290,18 +297,22 @@ allPipelinesSection model currentPipeline =
 
 favoritedPipelinesSection : Model m -> Maybe (PipelineScoped a) -> List (Html Message)
 favoritedPipelinesSection model currentPipeline =
-    if Set.isEmpty model.favoritedPipelines then
-        []
-
-    else
-        [ Html.div Styles.sectionHeader [ Html.text "favorites" ]
-        , Html.div [ id "favorites" ]
-            (model.pipelines
+    let
+        favoritedPipelines =
+            model.pipelines
                 |> RemoteData.withDefault []
                 |> List.filter
                     (\fp ->
                         Set.member fp.id model.favoritedPipelines
                     )
+    in
+    if List.isEmpty favoritedPipelines then
+        []
+
+    else
+        [ Html.div Styles.sectionHeader [ Html.text "favorite pipelines" ]
+        , Html.div [ id "favorites" ]
+            (favoritedPipelines
                 |> List.Extra.gatherEqualsBy .teamName
                 |> List.map
                     (\( p, ps ) ->
@@ -320,18 +331,11 @@ favoritedPipelinesSection model currentPipeline =
                             |> Views.viewTeam
                     )
             )
-        , Styles.separator
+        , Views.Styles.separator 10
         ]
 
 
-hamburgerMenu :
-    { a
-        | screenSize : ScreenSize
-        , pipelines : WebData (List Concourse.Pipeline)
-        , sideBarState : SideBarState
-        , hovered : HoverState.HoverState
-    }
-    -> Html Message
+hamburgerMenu : Model m -> Html Message
 hamburgerMenu model =
     if model.screenSize == Mobile then
         Html.text ""
@@ -339,13 +343,12 @@ hamburgerMenu model =
     else
         let
             isHamburgerClickable =
-                RemoteData.map (not << List.isEmpty) model.pipelines
-                    |> RemoteData.withDefault False
+                hasVisiblePipelines model
         in
         Html.div
             (id "hamburger-menu"
                 :: Styles.hamburgerMenu
-                    { isSideBarOpen = model.sideBarState.isOpen
+                    { isSideBarOpen = model.sideBarState.isOpen && isHamburgerClickable
                     , isClickable = isHamburgerClickable
                     }
                 ++ [ onMouseEnter <| Hover <| Just HamburgerMenu
@@ -369,3 +372,15 @@ hamburgerMenu model =
                     }
                 )
             ]
+
+
+hasVisiblePipelines : Model m -> Bool
+hasVisiblePipelines model =
+    model.pipelines
+        |> RemoteData.map (List.any (isPipelineVisible model))
+        |> RemoteData.withDefault False
+
+
+isPipelineVisible : { a | favoritedPipelines : Set Concourse.DatabaseID } -> Concourse.Pipeline -> Bool
+isPipelineVisible { favoritedPipelines } p =
+    not p.archived || Set.member p.id favoritedPipelines

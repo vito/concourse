@@ -6,7 +6,7 @@ import Dict
 import Expect
 import HoverState exposing (HoverState(..))
 import Html
-import Message.Message exposing (DomID(..))
+import Message.Message exposing (DomID(..), PipelinesSection(..))
 import Test exposing (Test, describe, test)
 import Test.Html.Query as Query
 import Test.Html.Selector exposing (text)
@@ -25,11 +25,7 @@ all =
                     }
                     { hovered =
                         Tooltip
-                            (VisibilityButton
-                                { teamName = Data.teamName
-                                , pipelineName = Data.pipelineName
-                                }
-                            )
+                            (VisibilityButton AllPipelinesSection Data.pipelineId)
                             Data.elementPosition
                     }
                     |> Maybe.map .body
@@ -46,11 +42,7 @@ all =
                     }
                     { hovered =
                         Tooltip
-                            (VisibilityButton
-                                { teamName = Data.teamName
-                                , pipelineName = Data.pipelineName
-                                }
-                            )
+                            (VisibilityButton AllPipelinesSection Data.pipelineId)
                             Data.elementPosition
                     }
                     |> Maybe.map .body
@@ -71,11 +63,7 @@ all =
                     }
                     { hovered =
                         Tooltip
-                            (PipelineStatusIcon
-                                { teamName = Data.teamName
-                                , pipelineName = Data.pipelineName
-                                }
-                            )
+                            (PipelineStatusIcon AllPipelinesSection Data.pipelineId)
                             Data.elementPosition
                     }
                     |> Maybe.map .body

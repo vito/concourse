@@ -704,7 +704,7 @@ updateBody msg ( model, effects ) =
             , effects
             )
 
-        Click (PipelineButton pipelineId) ->
+        Click (PipelineCardPauseToggle _ pipelineId) ->
             let
                 isPaused =
                     model.pipelines
@@ -724,7 +724,7 @@ updateBody msg ( model, effects ) =
                 Nothing ->
                     ( model, effects )
 
-        Click (VisibilityButton pipelineId) ->
+        Click (VisibilityButton _ pipelineId) ->
             let
                 isPublic =
                     model.pipelines
@@ -807,7 +807,7 @@ view session model =
 tooltip : { a | pipelines : Maybe (Dict String (List Pipeline)) } -> { b | hovered : HoverState.HoverState } -> Maybe Tooltip.Tooltip
 tooltip model { hovered } =
     case hovered of
-        HoverState.Tooltip (Message.PipelineStatusIcon _) _ ->
+        HoverState.Tooltip (Message.PipelineStatusIcon _ _) _ ->
             Just
                 { body =
                     Html.div
@@ -817,7 +817,7 @@ tooltip model { hovered } =
                 , arrow = Nothing
                 }
 
-        HoverState.Tooltip (Message.VisibilityButton pipelineId) _ ->
+        HoverState.Tooltip (Message.VisibilityButton _ pipelineId) _ ->
             model.pipelines
                 |> findPipeline pipelineId
                 |> Maybe.map
@@ -872,13 +872,13 @@ topBar session model =
                 else if not model.highDensity then
                     [ topBarContent [ SearchBar.view session model ]
                     , showArchivedToggleView model
-                    , Login.view session.userState model False
+                    , Login.view session.userState model
                     ]
 
                 else
                     [ topBarContent []
                     , showArchivedToggleView model
-                    , Login.view session.userState model False
+                    , Login.view session.userState model
                     ]
                )
 
@@ -966,6 +966,7 @@ dashboardView :
         , userState : UserState.UserState
         , turbulenceImgSrc : String
         , pipelineRunningKeyframes : String
+        , favoritedPipelines : Set Concourse.DatabaseID
     }
     -> Model
     -> Html Message
@@ -1106,6 +1107,7 @@ pipelinesView :
         | userState : UserState.UserState
         , hovered : HoverState.HoverState
         , pipelineRunningKeyframes : String
+        , favoritedPipelines : Set Concourse.DatabaseID
     }
     ->
         { b
@@ -1148,8 +1150,73 @@ pipelinesView session params =
                 , teams = teams
                 , pipelines = pipelines
                 , dashboardView = params.dashboardView
+                , favoritedPipelines = session.favoritedPipelines
                 }
                 |> List.sortWith (Group.ordering session)
+
+        ( headerView, offsetHeight ) =
+            if params.highDensity then
+                ( [], 0 )
+
+            else
+                let
+                    favoritedPipelines =
+                        filteredGroups
+                            |> List.concatMap .pipelines
+                            |> List.filter
+                                (\fp ->
+                                    Set.member fp.id session.favoritedPipelines
+                                )
+
+                    allPipelinesHeader =
+                        Html.div Styles.pipelineSectionHeader [ Html.text "all pipelines" ]
+                in
+                if List.isEmpty filteredGroups then
+                    ( [], 0 )
+
+                else if List.isEmpty favoritedPipelines then
+                    ( [ allPipelinesHeader ], PipelineGridConstants.sectionHeaderHeight )
+
+                else
+                    let
+                        offset =
+                            PipelineGridConstants.sectionHeaderHeight
+
+                        layout =
+                            PipelineGrid.computeFavoritePipelinesLayout
+                                { pipelineLayers = params.pipelineLayers
+                                , viewportWidth = params.viewportWidth
+                                , viewportHeight = params.viewportHeight
+                                , scrollTop = params.scrollTop - offset
+                                }
+                                favoritedPipelines
+                    in
+                    [ Html.div Styles.pipelineSectionHeader [ Html.text "favorite pipelines" ]
+                    , Group.viewFavoritePipelines
+                        session
+                        { dragState = NotDragging
+                        , dropState = NotDropping
+                        , now = params.now
+                        , hovered = session.hovered
+                        , pipelineRunningKeyframes = session.pipelineRunningKeyframes
+                        , pipelinesWithResourceErrors = params.pipelinesWithResourceErrors
+                        , pipelineLayers = params.pipelineLayers
+                        , pipelineCards = layout.pipelineCards
+                        , headers = layout.headers
+                        , groupCardsHeight = layout.height
+                        , pipelineJobs = params.pipelineJobs
+                        , jobs = jobs
+                        }
+                    , Views.Styles.separator PipelineGridConstants.sectionSpacerHeight
+                    , allPipelinesHeader
+                    ]
+                        |> (\html ->
+                                ( html
+                                , layout.height
+                                    + (2 * PipelineGridConstants.sectionHeaderHeight)
+                                    + PipelineGridConstants.sectionSpacerHeight
+                                )
+                           )
 
         groupViews =
             filteredGroups
@@ -1204,7 +1271,7 @@ pipelinesView session params =
                                             )
                                        )
                             )
-                            ( [], 0 )
+                            ( [], offsetHeight )
                             >> Tuple.first
                             >> List.reverse
                    )
@@ -1217,4 +1284,4 @@ pipelinesView session params =
         [ noResultsView params.query ]
 
     else
-        groupViews
+        headerView ++ groupViews

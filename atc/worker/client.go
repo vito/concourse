@@ -7,6 +7,7 @@ import (
 	"io"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"code.cloudfoundry.org/garden"
@@ -100,13 +101,14 @@ func NewClient(pool Pool,
 	provider WorkerProvider,
 	compression compression.Compression,
 	workerPollingInterval time.Duration,
-	WorkerStatusPublishInterval time.Duration) *client {
+	workerStatusPublishInterval time.Duration,
+) *client {
 	return &client{
 		pool:                        pool,
 		provider:                    provider,
 		compression:                 compression,
 		workerPollingInterval:       workerPollingInterval,
-		workerStatusPublishInterval: WorkerStatusPublishInterval,
+		workerStatusPublishInterval: workerStatusPublishInterval,
 	}
 }
 
@@ -302,6 +304,8 @@ func (client *client) RunTaskStep(
 		return TaskResult{}, err
 	}
 
+	eventDelegate.SelectedWorker(logger, chosenWorker.Name())
+
 	// container already exited
 	exitStatusProp, _ := container.Properties()
 	code := exitStatusProp[taskExitStatusPropertyName]
@@ -425,6 +429,8 @@ func (client *client) RunGetStep(
 		return GetResult{}, err
 	}
 
+	eventDelegate.SelectedWorker(logger, chosenWorker.Name())
+
 	sign, err := resource.Signature()
 	if err != nil {
 		return GetResult{}, err
@@ -482,6 +488,8 @@ func (client *client) RunPutStep(
 	if err != nil {
 		return PutResult{}, err
 	}
+
+	eventDelegate.SelectedWorker(logger, chosenWorker.Name())
 
 	container, err := chosenWorker.FindOrCreateContainer(
 		ctx,
@@ -576,6 +584,12 @@ func (client *client) chooseTaskWorker(
 	workerStatusPublishTicker := time.NewTicker(client.workerStatusPublishInterval)
 	defer workerStatusPublishTicker.Stop()
 
+	tasksWaitingLabels := metric.TasksWaitingLabels{
+		TeamId:     strconv.Itoa(workerSpec.TeamID),
+		WorkerTags: strings.Join(containerSpec.Tags, "_"),
+		Platform:   workerSpec.Platform,
+	}
+
 	for {
 		if chosenWorker, err = client.pool.FindOrChooseWorkerForContainer(
 			ctx,
@@ -621,6 +635,10 @@ func (client *client) chooseTaskWorker(
 			if elapsed > 0 {
 				message := fmt.Sprintf("Found a free worker after waiting %s.\n", elapsed.Round(1*time.Second))
 				writeOutputMessage(logger, outputWriter, message)
+				metric.TasksWaitingDuration{
+					Labels:   tasksWaitingLabels,
+					Duration: elapsed,
+				}.Emit(logger)
 			}
 
 			return chosenWorker, err
@@ -633,8 +651,12 @@ func (client *client) chooseTaskWorker(
 
 		// Increase task waiting only once
 		if elapsed == 0 {
-			metric.TasksWaiting.Inc()
-			defer metric.TasksWaiting.Dec()
+			_, ok := metric.Metrics.TasksWaiting[tasksWaitingLabels]
+			if !ok {
+				metric.Metrics.TasksWaiting[tasksWaitingLabels] = &metric.Gauge{}
+			}
+			metric.Metrics.TasksWaiting[tasksWaitingLabels].Inc()
+			defer metric.Metrics.TasksWaiting[tasksWaitingLabels].Dec()
 		}
 
 		elapsed = waitForWorker(logger,
