@@ -27,21 +27,6 @@ type FakeCheckFactory struct {
 		result2 bool
 		result3 error
 	}
-	CheckStub        func(int) (db.Check, bool, error)
-	checkMutex       sync.RWMutex
-	checkArgsForCall []struct {
-		arg1 int
-	}
-	checkReturns struct {
-		result1 db.Check
-		result2 bool
-		result3 error
-	}
-	checkReturnsOnCall map[int]struct {
-		result1 db.Check
-		result2 bool
-		result3 error
-	}
 	CreateCheckStub        func(int, bool, atc.Plan, db.CheckMetadata, db.SpanContext) (db.Check, bool, error)
 	createCheckMutex       sync.RWMutex
 	createCheckArgsForCall []struct {
@@ -93,18 +78,6 @@ type FakeCheckFactory struct {
 	}
 	resourcesReturnsOnCall map[int]struct {
 		result1 []db.Resource
-		result2 error
-	}
-	StartedChecksStub        func() ([]db.Check, error)
-	startedChecksMutex       sync.RWMutex
-	startedChecksArgsForCall []struct {
-	}
-	startedChecksReturns struct {
-		result1 []db.Check
-		result2 error
-	}
-	startedChecksReturnsOnCall map[int]struct {
-		result1 []db.Check
 		result2 error
 	}
 	TryCreateCheckStub        func(context.Context, db.Checkable, db.ResourceTypes, atc.Version, bool) (db.Check, bool, error)
@@ -191,72 +164,6 @@ func (fake *FakeCheckFactory) AcquireScanningLockReturnsOnCall(i int, result1 lo
 	}
 	fake.acquireScanningLockReturnsOnCall[i] = struct {
 		result1 lock.Lock
-		result2 bool
-		result3 error
-	}{result1, result2, result3}
-}
-
-func (fake *FakeCheckFactory) Check(arg1 int) (db.Check, bool, error) {
-	fake.checkMutex.Lock()
-	ret, specificReturn := fake.checkReturnsOnCall[len(fake.checkArgsForCall)]
-	fake.checkArgsForCall = append(fake.checkArgsForCall, struct {
-		arg1 int
-	}{arg1})
-	fake.recordInvocation("Check", []interface{}{arg1})
-	fake.checkMutex.Unlock()
-	if fake.CheckStub != nil {
-		return fake.CheckStub(arg1)
-	}
-	if specificReturn {
-		return ret.result1, ret.result2, ret.result3
-	}
-	fakeReturns := fake.checkReturns
-	return fakeReturns.result1, fakeReturns.result2, fakeReturns.result3
-}
-
-func (fake *FakeCheckFactory) CheckCallCount() int {
-	fake.checkMutex.RLock()
-	defer fake.checkMutex.RUnlock()
-	return len(fake.checkArgsForCall)
-}
-
-func (fake *FakeCheckFactory) CheckCalls(stub func(int) (db.Check, bool, error)) {
-	fake.checkMutex.Lock()
-	defer fake.checkMutex.Unlock()
-	fake.CheckStub = stub
-}
-
-func (fake *FakeCheckFactory) CheckArgsForCall(i int) int {
-	fake.checkMutex.RLock()
-	defer fake.checkMutex.RUnlock()
-	argsForCall := fake.checkArgsForCall[i]
-	return argsForCall.arg1
-}
-
-func (fake *FakeCheckFactory) CheckReturns(result1 db.Check, result2 bool, result3 error) {
-	fake.checkMutex.Lock()
-	defer fake.checkMutex.Unlock()
-	fake.CheckStub = nil
-	fake.checkReturns = struct {
-		result1 db.Check
-		result2 bool
-		result3 error
-	}{result1, result2, result3}
-}
-
-func (fake *FakeCheckFactory) CheckReturnsOnCall(i int, result1 db.Check, result2 bool, result3 error) {
-	fake.checkMutex.Lock()
-	defer fake.checkMutex.Unlock()
-	fake.CheckStub = nil
-	if fake.checkReturnsOnCall == nil {
-		fake.checkReturnsOnCall = make(map[int]struct {
-			result1 db.Check
-			result2 bool
-			result3 error
-		})
-	}
-	fake.checkReturnsOnCall[i] = struct {
-		result1 db.Check
 		result2 bool
 		result3 error
 	}{result1, result2, result3}
@@ -494,61 +401,6 @@ func (fake *FakeCheckFactory) ResourcesReturnsOnCall(i int, result1 []db.Resourc
 	}{result1, result2}
 }
 
-func (fake *FakeCheckFactory) StartedChecks() ([]db.Check, error) {
-	fake.startedChecksMutex.Lock()
-	ret, specificReturn := fake.startedChecksReturnsOnCall[len(fake.startedChecksArgsForCall)]
-	fake.startedChecksArgsForCall = append(fake.startedChecksArgsForCall, struct {
-	}{})
-	fake.recordInvocation("StartedChecks", []interface{}{})
-	fake.startedChecksMutex.Unlock()
-	if fake.StartedChecksStub != nil {
-		return fake.StartedChecksStub()
-	}
-	if specificReturn {
-		return ret.result1, ret.result2
-	}
-	fakeReturns := fake.startedChecksReturns
-	return fakeReturns.result1, fakeReturns.result2
-}
-
-func (fake *FakeCheckFactory) StartedChecksCallCount() int {
-	fake.startedChecksMutex.RLock()
-	defer fake.startedChecksMutex.RUnlock()
-	return len(fake.startedChecksArgsForCall)
-}
-
-func (fake *FakeCheckFactory) StartedChecksCalls(stub func() ([]db.Check, error)) {
-	fake.startedChecksMutex.Lock()
-	defer fake.startedChecksMutex.Unlock()
-	fake.StartedChecksStub = stub
-}
-
-func (fake *FakeCheckFactory) StartedChecksReturns(result1 []db.Check, result2 error) {
-	fake.startedChecksMutex.Lock()
-	defer fake.startedChecksMutex.Unlock()
-	fake.StartedChecksStub = nil
-	fake.startedChecksReturns = struct {
-		result1 []db.Check
-		result2 error
-	}{result1, result2}
-}
-
-func (fake *FakeCheckFactory) StartedChecksReturnsOnCall(i int, result1 []db.Check, result2 error) {
-	fake.startedChecksMutex.Lock()
-	defer fake.startedChecksMutex.Unlock()
-	fake.StartedChecksStub = nil
-	if fake.startedChecksReturnsOnCall == nil {
-		fake.startedChecksReturnsOnCall = make(map[int]struct {
-			result1 []db.Check
-			result2 error
-		})
-	}
-	fake.startedChecksReturnsOnCall[i] = struct {
-		result1 []db.Check
-		result2 error
-	}{result1, result2}
-}
-
 func (fake *FakeCheckFactory) TryCreateCheck(arg1 context.Context, arg2 db.Checkable, arg3 db.ResourceTypes, arg4 atc.Version, arg5 bool) (db.Check, bool, error) {
 	fake.tryCreateCheckMutex.Lock()
 	ret, specificReturn := fake.tryCreateCheckReturnsOnCall[len(fake.tryCreateCheckArgsForCall)]
@@ -624,8 +476,6 @@ func (fake *FakeCheckFactory) Invocations() map[string][][]interface{} {
 	defer fake.invocationsMutex.RUnlock()
 	fake.acquireScanningLockMutex.RLock()
 	defer fake.acquireScanningLockMutex.RUnlock()
-	fake.checkMutex.RLock()
-	defer fake.checkMutex.RUnlock()
 	fake.createCheckMutex.RLock()
 	defer fake.createCheckMutex.RUnlock()
 	fake.notifyCheckerMutex.RLock()
@@ -634,8 +484,6 @@ func (fake *FakeCheckFactory) Invocations() map[string][][]interface{} {
 	defer fake.resourceTypesMutex.RUnlock()
 	fake.resourcesMutex.RLock()
 	defer fake.resourcesMutex.RUnlock()
-	fake.startedChecksMutex.RLock()
-	defer fake.startedChecksMutex.RUnlock()
 	fake.tryCreateCheckMutex.RLock()
 	defer fake.tryCreateCheckMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
