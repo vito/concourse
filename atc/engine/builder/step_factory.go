@@ -14,16 +14,16 @@ import (
 )
 
 type stepFactory struct {
-	pool                            worker.Pool
-	client                          worker.Client
-	resourceFactory                 resource.ResourceFactory
-	teamFactory                     db.TeamFactory
-	buildFactory                    db.BuildFactory
-	resourceCacheFactory            db.ResourceCacheFactory
-	resourceConfigFactory           db.ResourceConfigFactory
-	defaultLimits                   atc.ContainerLimits
-	strategy                        worker.ContainerPlacementStrategy
-	lockFactory                     lock.LockFactory
+	pool                  worker.Pool
+	client                worker.Client
+	resourceFactory       resource.ResourceFactory
+	teamFactory           db.TeamFactory
+	buildFactory          db.BuildFactory
+	resourceCacheFactory  db.ResourceCacheFactory
+	resourceConfigFactory db.ResourceConfigFactory
+	defaultLimits         atc.ContainerLimits
+	strategy              worker.ContainerPlacementStrategy
+	lockFactory           lock.LockFactory
 }
 
 func NewStepFactory(
@@ -39,16 +39,16 @@ func NewStepFactory(
 	lockFactory lock.LockFactory,
 ) *stepFactory {
 	return &stepFactory{
-		pool:                            pool,
-		client:                          client,
-		resourceFactory:                 resourceFactory,
-		teamFactory:                     teamFactory,
-		buildFactory:                    buildFactory,
-		resourceCacheFactory:            resourceCacheFactory,
-		resourceConfigFactory:           resourceConfigFactory,
-		defaultLimits:                   defaultLimits,
-		strategy:                        strategy,
-		lockFactory:                     lockFactory,
+		pool:                  pool,
+		client:                client,
+		resourceFactory:       resourceFactory,
+		teamFactory:           teamFactory,
+		buildFactory:          buildFactory,
+		resourceCacheFactory:  resourceCacheFactory,
+		resourceConfigFactory: resourceConfigFactory,
+		defaultLimits:         defaultLimits,
+		strategy:              strategy,
+		lockFactory:           lockFactory,
 	}
 }
 
@@ -119,6 +119,7 @@ func (factory *stepFactory) CheckStep(
 		*plan.Check,
 		stepMetadata,
 		factory.resourceFactory,
+		factory.resourceConfigFactory,
 		containerMetadata,
 		worker.NewRandomPlacementStrategy(),
 		factory.pool,
