@@ -292,15 +292,12 @@ var _ = Describe("DelegateFactory", func() {
 
 	Describe("CheckDelegate", func() {
 		var (
-			delegate  exec.CheckDelegate
-			fakeCheck *dbfakes.FakeCheck
-			versions  []atc.Version
+			delegate exec.CheckDelegate
+			versions []atc.Version
 		)
 
 		BeforeEach(func() {
-			fakeCheck = new(dbfakes.FakeCheck)
-
-			delegate = builder.NewCheckDelegate(fakeCheck, "some-plan-id", buildVars, fakeClock)
+			delegate = builder.NewCheckDelegate(fakeBuild, "some-plan-id", buildVars, fakeClock)
 			versions = []atc.Version{{"some": "version"}}
 		})
 
