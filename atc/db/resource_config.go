@@ -49,6 +49,7 @@ type ResourceConfig interface {
 	CreatedByBaseResourceType() *UsedBaseResourceType
 	OriginBaseResourceType() *UsedBaseResourceType
 
+	FindOrCreateScope(Resource) (ResourceConfigScope, error)
 	FindResourceConfigScopeByID(int, Resource) (ResourceConfigScope, bool, error)
 }
 
@@ -71,6 +72,34 @@ func (r *resourceConfig) OriginBaseResourceType() *UsedBaseResourceType {
 		return r.createdByBaseResourceType
 	}
 	return r.createdByResourceCache.ResourceConfig().OriginBaseResourceType()
+}
+
+// XXX(check-refactor): unit test
+func (r *resourceConfig) FindOrCreateScope(resource Resource) (ResourceConfigScope, error) {
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	defer Rollback(tx)
+
+	scope, err := findOrCreateResourceConfigScope(
+		tx,
+		r.conn,
+		r.lockFactory,
+		r,
+		resource,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return scope, nil
 }
 
 func (r *resourceConfig) FindResourceConfigScopeByID(resourceConfigScopeID int, resource Resource) (ResourceConfigScope, bool, error) {

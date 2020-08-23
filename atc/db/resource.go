@@ -62,6 +62,8 @@ type Resource interface {
 	UnpinVersion() error
 
 	SetResourceConfig(atc.Source, atc.VersionedResourceTypes) (ResourceConfigScope, error)
+	SetResourceConfigScope(ResourceConfigScope) error
+
 	SetCheckSetupError(error) error
 	NotifyScan() error
 
@@ -186,6 +188,27 @@ func (r *resource) Reload() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// XXX(check-refactor): unit test
+func (r *resource) SetResourceConfigScope(scope ResourceConfigScope) error {
+	_, err := psql.Update("resources").
+		Set("resource_config_id", scope.ResourceConfig().ID()).
+		Set("resource_config_scope_id", scope.ID()).
+		Where(sq.Eq{"id": r.id}).
+		Where(sq.Or{
+			sq.Eq{"resource_config_id": nil},
+			sq.Eq{"resource_config_scope_id": nil},
+			sq.NotEq{"resource_config_id": scope.ResourceConfig().ID()},
+			sq.NotEq{"resource_config_scope_id": scope.ID()},
+		}).
+		RunWith(r.conn).
+		Exec()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.VersionedResourceTypes) (ResourceConfigScope, error) {
