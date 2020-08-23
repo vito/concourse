@@ -85,9 +85,7 @@ func (c *checkFactory) NotifyChecker() error {
 	return c.conn.Bus().Notify(atc.ComponentLidarChecker)
 }
 
-func (c *checkFactory) AcquireScanningLock(
-	logger lager.Logger,
-) (lock.Lock, bool, error) {
+func (c *checkFactory) AcquireScanningLock(logger lager.Logger) (lock.Lock, bool, error) {
 	return c.lockFactory.Acquire(
 		logger,
 		lock.NewResourceScanningLockID(),
@@ -115,77 +113,44 @@ func (c *checkFactory) TryCreateCheck(ctx context.Context, checkable Checkable, 
 		}
 	}
 
-	pp, found, err := checkable.Pipeline()
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to reload pipeline: %s", err.Error())
-	}
-	if !found {
-		return nil, false, fmt.Errorf("pipeline not found")
-	}
-
-	varss, err := pp.Variables(logger, c.secrets, c.varSourcePool)
-	if err != nil {
-		return nil, false, err
-	}
-
-	source, err := creds.NewSource(varss, checkable.Source()).Evaluate()
-	if err != nil {
-		return nil, false, err
-	}
-
 	filteredTypes := resourceTypes.Filter(checkable).Deserialize()
-	versionedResourceTypes, err := creds.NewVersionedResourceTypes(varss, filteredTypes).Evaluate()
-	if err != nil {
-		return nil, false, err
-	}
-
-	// This could have changed based on new variable interpolation so update it
-	resourceConfigScope, err := checkable.SetResourceConfig(source, versionedResourceTypes)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if fromVersion == nil {
-		rcv, found, err := resourceConfigScope.LatestVersion()
-		if err != nil {
-			return nil, false, err
-		}
-
-		if found {
-			fromVersion = atc.Version(rcv.Version())
-		}
-	}
 
 	checkPlan := checkable.CheckPlan(fromVersion, timeout, filteredTypes)
 
-	plan := atc.Plan{
-		// XXX(check-refactor): use plan factory
-		ID: atc.PlanID("TODO"),
+	logger.Info("constructed-plan", lager.Data{
+		"plan": checkPlan,
+	})
 
-		Check: &checkPlan,
-	}
+	return nil, false, nil
 
-	meta := CheckMetadata{
-		TeamID:             checkable.TeamID(),
-		TeamName:           checkable.TeamName(),
-		PipelineName:       checkable.PipelineName(),
-		PipelineID:         checkable.PipelineID(),
-		ResourceConfigID:   resourceConfigScope.ResourceConfig().ID(),
-		BaseResourceTypeID: resourceConfigScope.ResourceConfig().OriginBaseResourceType().ID,
-	}
+	// plan := atc.Plan{
+	// 	// XXX(check-refactor): use plan factory
+	// 	ID: atc.PlanID("TODO"),
 
-	check, created, err := c.CreateCheck(
-		resourceConfigScope.ID(),
-		manuallyTriggered,
-		plan,
-		meta,
-		NewSpanContext(ctx),
-	)
-	if err != nil {
-		return nil, false, err
-	}
+	// 	Check: &checkPlan,
+	// }
 
-	return check, created, nil
+	// meta := CheckMetadata{
+	// 	TeamID:             checkable.TeamID(),
+	// 	TeamName:           checkable.TeamName(),
+	// 	PipelineName:       checkable.PipelineName(),
+	// 	PipelineID:         checkable.PipelineID(),
+	// 	ResourceConfigID:   resourceConfigScope.ResourceConfig().ID(),
+	// 	BaseResourceTypeID: resourceConfigScope.ResourceConfig().OriginBaseResourceType().ID,
+	// }
+
+	// check, created, err := c.CreateCheck(
+	// 	resourceConfigScope.ID(),
+	// 	manuallyTriggered,
+	// 	plan,
+	// 	meta,
+	// 	NewSpanContext(ctx),
+	// )
+	// if err != nil {
+	// 	return nil, false, err
+	// }
+
+	// return check, created, nil
 }
 
 func (c *checkFactory) CreateCheck(
