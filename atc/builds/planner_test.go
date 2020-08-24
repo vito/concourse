@@ -33,8 +33,8 @@ type PlannerTest struct {
 	Err        error
 }
 
-var resources = db.SchedulerResources{
-	db.SchedulerResource{
+var resources = db.NamedResources{
+	db.NamedResource{
 		Name:   "some-resource",
 		Type:   "some-resource-type",
 		Source: atc.Source{"some": "source"},
@@ -419,12 +419,12 @@ var factoryTests = []PlannerTest{
 			},
 			Vars: []atc.AcrossVarConfig{
 				{
-					Var: "var1",
-					Values: []interface{}{"a1", "a2"},
+					Var:         "var1",
+					Values:      []interface{}{"a1", "a2"},
 					MaxInFlight: &atc.MaxInFlightConfig{All: true},
 				},
 				{
-					Var: "var2",
+					Var:    "var2",
 					Values: []interface{}{"b1", "b2"},
 				},
 			},

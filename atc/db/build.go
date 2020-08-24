@@ -59,6 +59,7 @@ var buildsQuery = psql.Select(`
 		b.id,
 		b.name,
 		b.job_id,
+		b.resource_id,
 		b.team_id,
 		b.status,
 		b.manually_triggered,
@@ -80,7 +81,7 @@ var buildsQuery = psql.Select(`
 		b.completed,
 		b.inputs_ready,
 		b.rerun_of,
-		r.name,
+		rb.name,
 		b.rerun_number,
 		b.span_context
 	`).
@@ -88,7 +89,7 @@ var buildsQuery = psql.Select(`
 	JoinClause("LEFT OUTER JOIN jobs j ON b.job_id = j.id").
 	JoinClause("LEFT OUTER JOIN pipelines p ON b.pipeline_id = p.id").
 	JoinClause("LEFT OUTER JOIN teams t ON b.team_id = t.id").
-	JoinClause("LEFT OUTER JOIN builds r ON r.id = b.rerun_of")
+	JoinClause("LEFT OUTER JOIN builds rb ON rb.id = b.rerun_of")
 
 var minMaxIdQuery = psql.Select("COALESCE(MAX(b.id), 0)", "COALESCE(MIN(b.id), 0)").
 	From("builds as b")
@@ -1027,7 +1028,7 @@ func (b *build) SaveOutput(
 		return err
 	}
 
-	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, b.conn, b.lockFactory, resourceConfig, resource, resourceType, resourceTypes)
+	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, b.conn, b.lockFactory, resourceConfig, resource, resourceTypes)
 	if err != nil {
 		return err
 	}
@@ -1575,7 +1576,7 @@ func buildEventSeq(buildid int) string {
 
 func scanBuild(b *build, row scannable, encryptionStrategy encryption.Strategy) error {
 	var (
-		jobID, pipelineID, rerunOf, rerunNumber                             sql.NullInt64
+		jobID, resourceID, pipelineID, rerunOf, rerunNumber                 sql.NullInt64
 		schema, privatePlan, jobName, pipelineName, publicPlan, rerunOfName sql.NullString
 		createTime, startTime, endTime, reapTime                            pq.NullTime
 		nonce, spanContext                                                  sql.NullString
@@ -1587,6 +1588,7 @@ func scanBuild(b *build, row scannable, encryptionStrategy encryption.Strategy) 
 		&b.id,
 		&b.name,
 		&jobID,
+		&resourceID,
 		&b.teamID,
 		&status,
 		&b.isManuallyTriggered,

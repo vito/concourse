@@ -117,8 +117,8 @@ func (factory *stepFactory) CheckStep(
 	checkStep := exec.NewCheckStep(
 		plan.ID,
 		*plan.Check,
-		nil, // XXX: resource
-		nil, // XXX: resource config factory
+		nil, // XXX: resource (optional? but how to pass it here?)
+		factory.resourceConfigFactory,
 		stepMetadata,
 		factory.resourceFactory,
 		containerMetadata,

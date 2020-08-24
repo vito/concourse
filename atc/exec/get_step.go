@@ -229,6 +229,7 @@ func (step *GetStep) run(ctx context.Context, state RunState) error {
 			},
 		})
 
+		// XXX: move this check into the delegate
 		if step.plan.Resource != "" {
 			step.delegate.UpdateVersion(logger, step.plan, getResult.VersionResult)
 		}

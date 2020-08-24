@@ -228,9 +228,20 @@ func (f *resourceConfigFactory) FindOrCreateResourceConfig(
 	return resourceConfig, nil
 }
 
+type ParentTypeHasNoVersionError struct {
+	Type string
+}
+
+func (err ParentTypeHasNoVersionError) Error() string {
+	return fmt.Sprintf("parent type '%s' does not have a version yet", err.Type)
+}
+
 // constructResourceConfig cannot be called for constructing a resource type's
 // resource config while also containing the same resource type in the list of
 // resource types, because that results in a circular dependency.
+//
+// XXX: dealing with a missing version in the resource types is awkward; can we
+// reduce the number of call sites for this? e.g. Build.SaveOutput
 func constructResourceConfigDescriptor(
 	resourceTypeName string,
 	source atc.Source,
@@ -242,6 +253,15 @@ func constructResourceConfigDescriptor(
 
 	customType, found := resourceTypes.Lookup(resourceTypeName)
 	if found {
+		// XXX: prevent this from constructing if version is null
+		//
+		// seems like nothing else checks for that. where did that used to happen?
+		if customType.Version == nil {
+			return ResourceConfigDescriptor{}, ParentTypeHasNoVersionError{
+				Type: customType.Name,
+			}
+		}
+
 		customTypeResourceConfig, err := constructResourceConfigDescriptor(
 			customType.Type,
 			customType.Source,

@@ -324,7 +324,7 @@ func (example Example) Run() {
 
 	needsRetry, err := buildStarter.TryStartPendingBuildsForJob(lager.NewLogger("job-scheduling-tests"), db.SchedulerJob{
 		Job: fakeJob,
-		Resources: db.SchedulerResources{
+		Resources: db.NamedResources{
 			{
 				Name: "fake-resource",
 				Type: "fake-resource-type",

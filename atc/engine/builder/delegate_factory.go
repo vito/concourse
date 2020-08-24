@@ -2,6 +2,7 @@ package builder
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -38,6 +39,53 @@ func (delegate *delegateFactory) TaskDelegate(build db.Build, planID atc.PlanID,
 
 func (delegate *delegateFactory) BuildStepDelegate(build db.Build, planID atc.PlanID, buildVars *vars.BuildVariables) exec.BuildStepDelegate {
 	return NewBuildStepDelegate(build, planID, buildVars, clock.NewClock())
+}
+
+func NewCheckDelegate(build db.Build, plan atc.Plan, buildVars *vars.BuildVariables, clock clock.Clock) exec.CheckDelegate {
+	return &checkDelegate{
+		BuildStepDelegate: NewBuildStepDelegate(build, plan.ID, buildVars, clock),
+
+		build: build,
+		plan:  plan.Check,
+		clock: clock,
+
+		eventOrigin: event.Origin{ID: event.OriginID(plan.ID)},
+	}
+}
+
+type checkDelegate struct {
+	exec.BuildStepDelegate
+
+	build       db.Build
+	plan        *atc.CheckPlan
+	clock       clock.Clock
+	eventOrigin event.Origin
+}
+
+func (d *checkDelegate) SaveVersions(resourceConfig db.ResourceConfig, versions []atc.Version) error {
+	var resource db.Resource
+	if d.plan.Resource != "" {
+		pipeline, found, err := d.build.Pipeline()
+		if err != nil {
+			return fmt.Errorf("get build pipeline: %w", err)
+		}
+
+		if !found {
+			// pipeline removed
+			return fmt.Errorf("pipeline removed")
+		}
+
+		resource, found, err = pipeline.Resource(d.plan.Resource)
+		if err != nil {
+			return fmt.Errorf("get pipeline resource: %w", err)
+		}
+
+		if !found {
+			return fmt.Errorf("resource removed")
+		}
+	}
+
+	return resourceConfig.SaveVersions(versions, resource, d.plan.VersionedResourceTypes)
 }
 
 func NewGetDelegate(build db.Build, planID atc.PlanID, buildVars *vars.BuildVariables, clock clock.Clock) exec.GetDelegate {
@@ -120,6 +168,8 @@ func (d *getDelegate) UpdateVersion(log lager.Logger, plan atc.GetPlan, info run
 		logger.Debug("pipeline-not-found")
 		return
 	}
+
+	// XXX: no-op if plan.Resource == ""
 
 	resource, found, err := pipeline.Resource(plan.Resource)
 	if err != nil {
@@ -207,6 +257,8 @@ func (d *putDelegate) Finished(logger lager.Logger, exitStatus exec.ExitStatus, 
 }
 
 func (d *putDelegate) SaveOutput(log lager.Logger, plan atc.PutPlan, source atc.Source, resourceTypes atc.VersionedResourceTypes, info runtime.VersionResult) {
+	// XXX: exit if resource == ""
+
 	logger := log.WithData(lager.Data{
 		"step":          plan.Name,
 		"resource":      plan.Resource,

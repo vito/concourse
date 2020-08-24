@@ -652,7 +652,7 @@ var _ = Describe("Job Factory", func() {
 					Expect(jobs[0].Name()).To(Equal(job1.Name()))
 					Expect(jobs[0].Resources).To(HaveLen(1))
 					Expect(jobs[0].Resources).To(ConsistOf(
-						db.SchedulerResource{
+						db.NamedResource{
 							Name:   "some-resource",
 							Type:   "some-type",
 							Source: atc.Source{"some": "source"},
@@ -768,33 +768,33 @@ var _ = Describe("Job Factory", func() {
 					jobs, err := jobFactory.JobsToSchedule()
 					Expect(err).ToNot(HaveOccurred())
 
-					jobResources := make(map[string]db.SchedulerResources)
+					jobResources := make(map[string]db.NamedResources)
 					for _, job := range jobs {
 						jobResources[job.Name()] = job.Resources
 					}
 
 					Expect(jobResources).To(MatchAllKeys(Keys{
 						job1.Name(): ConsistOf(
-							db.SchedulerResource{
+							db.NamedResource{
 								Name: "some-resource",
 								Type: "some-type",
 							},
 						),
 						job2.Name(): ConsistOf(
-							db.SchedulerResource{
+							db.NamedResource{
 								Name: "some-resource",
 								Type: "some-type",
 							},
-							db.SchedulerResource{
+							db.NamedResource{
 								Name: "other-resource",
 								Type: "some-type",
 							}),
 						job3.Name(): ConsistOf(
-							db.SchedulerResource{
+							db.NamedResource{
 								Name: "some-resource",
 								Type: "other-type",
 							},
-							db.SchedulerResource{
+							db.NamedResource{
 								Name: "some-resource-2",
 								Type: "other-type",
 							}),
@@ -848,7 +848,7 @@ var _ = Describe("Job Factory", func() {
 					Expect(len(jobs)).To(Equal(1))
 					Expect(jobs[0].Name()).To(Equal(job1.Name()))
 					Expect(jobs[0].Resources).To(ConsistOf(
-						db.SchedulerResource{
+						db.NamedResource{
 							Name:   "some-resource",
 							Type:   "some-type",
 							Source: atc.Source{"some": "source"},
@@ -908,7 +908,7 @@ var _ = Describe("Job Factory", func() {
 					Expect(len(jobs)).To(Equal(1))
 					Expect(jobs[0].Name()).To(Equal(job1.Name()))
 					Expect(jobs[0].Resources).To(ConsistOf(
-						db.SchedulerResource{
+						db.NamedResource{
 							Name:   "some-resource",
 							Type:   "some-type",
 							Source: atc.Source{"some": "source"},

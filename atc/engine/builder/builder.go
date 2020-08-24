@@ -375,7 +375,7 @@ func (builder *stepBuilder) buildCheckStep(build db.Build, plan atc.Plan, buildV
 		db.ContainerMetadata{
 			Type: db.ContainerTypeCheck,
 		},
-		builder.delegateFactory.BuildStepDelegate(build, plan.ID, buildVars),
+		builder.delegateFactory.CheckDelegate(build, plan, buildVars),
 	)
 }
 

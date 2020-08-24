@@ -41,10 +41,10 @@ import (
 	"github.com/concourse/concourse/atc/engine"
 	"github.com/concourse/concourse/atc/engine/builder"
 	"github.com/concourse/concourse/atc/gc"
-	"github.com/concourse/concourse/atc/lidar"
 	"github.com/concourse/concourse/atc/metric"
 	"github.com/concourse/concourse/atc/policy"
 	"github.com/concourse/concourse/atc/resource"
+	"github.com/concourse/concourse/atc/resources"
 	"github.com/concourse/concourse/atc/scheduler"
 	"github.com/concourse/concourse/atc/scheduler/algorithm"
 	"github.com/concourse/concourse/atc/syslog"
@@ -509,7 +509,7 @@ func (cmd *RunCommand) Runner(positionalArguments []string) (ifrit.Runner, error
 		return nil, err
 	}
 
-	secretManager, err := cmd.secretManager(logger)
+	globalSecrets, err := cmd.globalSecrets(logger)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +521,7 @@ func (cmd *RunCommand) Runner(positionalArguments []string) (ifrit.Runner, error
 		clock.NewClock(),
 	)
 
-	members, err := cmd.constructMembers(logger, reconfigurableSink, apiConn, backendConn, gcConn, storage, lockFactory, secretManager)
+	members, err := cmd.constructMembers(logger, reconfigurableSink, apiConn, backendConn, gcConn, storage, lockFactory, globalSecrets)
 	if err != nil {
 		return nil, err
 	}
@@ -567,7 +567,7 @@ func (cmd *RunCommand) constructMembers(
 	gcConn db.Conn,
 	storage storage.Storage,
 	lockFactory lock.LockFactory,
-	secretManager creds.Secrets,
+	globalSecrets creds.Secrets,
 ) ([]grouper.Member, error) {
 	if cmd.TelemetryOptIn {
 		url := fmt.Sprintf("http://telemetry.concourse-ci.org/?version=%s", concourse.Version)
@@ -584,12 +584,12 @@ func (cmd *RunCommand) constructMembers(
 		return nil, err
 	}
 
-	apiMembers, err := cmd.constructAPIMembers(logger, reconfigurableSink, apiConn, storage, lockFactory, secretManager, policyChecker)
+	apiMembers, err := cmd.constructAPIMembers(logger, reconfigurableSink, apiConn, storage, lockFactory, globalSecrets, policyChecker)
 	if err != nil {
 		return nil, err
 	}
 
-	backendComponents, err := cmd.backendComponents(logger, backendConn, lockFactory, secretManager, policyChecker)
+	backendComponents, err := cmd.backendComponents(logger, backendConn, lockFactory, globalSecrets, policyChecker)
 	if err != nil {
 		return nil, err
 	}
@@ -649,7 +649,7 @@ func (cmd *RunCommand) constructAPIMembers(
 	dbConn db.Conn,
 	storage storage.Storage,
 	lockFactory lock.LockFactory,
-	secretManager creds.Secrets,
+	globalSecrets creds.Secrets,
 	policyChecker *policy.Checker,
 ) ([]grouper.Member, error) {
 
@@ -720,11 +720,11 @@ func (cmd *RunCommand) constructAPIMembers(
 	credsManagers := cmd.CredentialManagers
 	dbPipelineFactory := db.NewPipelineFactory(dbConn, lockFactory)
 	dbJobFactory := db.NewJobFactory(dbConn, lockFactory)
-	dbResourceFactory := db.NewResourceFactory(dbConn, lockFactory)
+	dbResourceFactory := db.NewResourceFactory(dbConn, lockFactory, globalSecrets, cmd.varSourcePool)
 	dbContainerRepository := db.NewContainerRepository(dbConn)
 	gcContainerDestroyer := gc.NewDestroyer(logger, dbContainerRepository, dbVolumeRepository)
 	dbBuildFactory := db.NewBuildFactory(dbConn, lockFactory, cmd.GC.OneOffBuildGracePeriod, cmd.GC.FailedGracePeriod)
-	dbCheckFactory := db.NewCheckFactory(dbConn, lockFactory, secretManager, cmd.varSourcePool, cmd.GlobalResourceCheckTimeout)
+	dbCheckFactory := db.NewCheckFactory(dbConn, lockFactory, globalSecrets, cmd.varSourcePool, cmd.GlobalResourceCheckTimeout)
 	dbAccessTokenFactory := db.NewAccessTokenFactory(dbConn)
 	dbClock := db.NewClock()
 	dbWall := db.NewWall(dbConn, &dbClock)
@@ -764,7 +764,7 @@ func (cmd *RunCommand) constructAPIMembers(
 		dbResourceConfigFactory,
 		userFactory,
 		workerClient,
-		secretManager,
+		globalSecrets,
 		credsManagers,
 		accessFactory,
 		dbWall,
@@ -894,7 +894,7 @@ func (cmd *RunCommand) backendComponents(
 	logger lager.Logger,
 	dbConn db.Conn,
 	lockFactory lock.LockFactory,
-	secretManager creds.Secrets,
+	globalSecrets creds.Secrets,
 	policyChecker *policy.Checker,
 ) ([]RunnableComponent, error) {
 
@@ -916,10 +916,9 @@ func (cmd *RunCommand) backendComponents(
 	dbResourceConfigFactory := db.NewResourceConfigFactory(dbConn, lockFactory)
 
 	dbBuildFactory := db.NewBuildFactory(dbConn, lockFactory, cmd.GC.OneOffBuildGracePeriod, cmd.GC.FailedGracePeriod)
-	dbCheckFactory := db.NewCheckFactory(dbConn, lockFactory, secretManager, cmd.varSourcePool, cmd.GlobalResourceCheckTimeout)
+	dbResourceFactory := db.NewResourceFactory(dbConn, lockFactory, globalSecrets, cmd.varSourcePool)
 	dbPipelineFactory := db.NewPipelineFactory(dbConn, lockFactory)
 	dbJobFactory := db.NewJobFactory(dbConn, lockFactory)
-	dbCheckableCounter := db.NewCheckableCounter(dbConn)
 	dbPipelineLifecycle := db.NewPipelineLifecycle(dbConn, lockFactory)
 
 	alg := algorithm.New(db.NewVersionsDB(dbConn, algorithmLimitRows, schedulerCache))
@@ -984,7 +983,7 @@ func (cmd *RunCommand) backendComponents(
 		dbBuildFactory,
 		dbResourceCacheFactory,
 		dbResourceConfigFactory,
-		secretManager,
+		globalSecrets,
 		defaultLimits,
 		buildContainerStrategy,
 		lockFactory,
@@ -1004,36 +1003,23 @@ func (cmd *RunCommand) backendComponents(
 		cmd.ResourceWithWebhookCheckingInterval = cmd.ResourceCheckingInterval
 	}
 
+	buildPlanner := builds.NewPlanner(atc.NewPlanFactory(time.Now().Unix()))
+
 	components := []RunnableComponent{
 		{
 			Component: atc.Component{
-				Name:     atc.ComponentLidarScanner,
-				Interval: cmd.LidarScannerInterval,
+				Name:     "resource-scheduler",
+				Interval: 10 * time.Second,
 			},
-			Runnable: lidar.NewScanner(
-				logger.Session(atc.ComponentLidarScanner),
-				dbCheckFactory,
-				secretManager,
-				cmd.GlobalResourceCheckTimeout,
-				cmd.ResourceCheckingInterval,
-				cmd.ResourceWithWebhookCheckingInterval,
-			),
-		},
-		{
-			Component: atc.Component{
-				Name:     atc.ComponentLidarChecker,
-				Interval: cmd.LidarCheckerInterval,
-			},
-			Runnable: lidar.NewChecker(
-				logger.Session(atc.ComponentLidarChecker),
-				dbCheckFactory,
-				engine,
-				lidar.CheckRateCalculator{
-					MaxChecksPerSecond:       cmd.MaxChecksPerSecond,
-					ResourceCheckingInterval: cmd.ResourceCheckingInterval,
-					CheckableCounter:         dbCheckableCounter,
+			Runnable: resources.BuildScheduler{
+				Factory: dbResourceFactory,
+				Planner: buildPlanner,
+
+				IntervalConfig: resources.IntervalConfig{
+					DefaultCheckInterval:        cmd.ResourceCheckingInterval,
+					DefaultWebhookCheckInterval: cmd.ResourceWithWebhookCheckingInterval,
 				},
-			),
+			},
 		},
 		{
 			Component: atc.Component{
@@ -1044,12 +1030,8 @@ func (cmd *RunCommand) backendComponents(
 				logger.Session("scheduler"),
 				dbJobFactory,
 				&scheduler.Scheduler{
-					Algorithm: alg,
-					BuildStarter: scheduler.NewBuildStarter(
-						builds.NewPlanner(
-							atc.NewPlanFactory(time.Now().Unix()),
-						),
-						alg),
+					Algorithm:    alg,
+					BuildStarter: scheduler.NewBuildStarter(buildPlanner, alg),
 				},
 				cmd.JobSchedulingMaxInFlight,
 			),
@@ -1214,7 +1196,7 @@ func workerVersion() (version.Version, error) {
 	return version.NewVersionFromString(concourse.WorkerVersion)
 }
 
-func (cmd *RunCommand) secretManager(logger lager.Logger) (creds.Secrets, error) {
+func (cmd *RunCommand) globalSecrets(logger lager.Logger) (creds.Secrets, error) {
 	var secretsFactory creds.SecretsFactory = noop.NewNoopFactory()
 	for name, manager := range cmd.CredentialManagers {
 		if !manager.IsConfigured() {
@@ -1574,7 +1556,7 @@ func (cmd *RunCommand) constructEngine(
 	buildFactory db.BuildFactory,
 	resourceCacheFactory db.ResourceCacheFactory,
 	resourceConfigFactory db.ResourceConfigFactory,
-	secretManager creds.Secrets,
+	globalSecrets creds.Secrets,
 	defaultLimits atc.ContainerLimits,
 	strategy worker.ContainerPlacementStrategy,
 	lockFactory lock.LockFactory,
@@ -1597,7 +1579,7 @@ func (cmd *RunCommand) constructEngine(
 		stepFactory,
 		builder.NewDelegateFactory(),
 		cmd.ExternalURL.String(),
-		secretManager,
+		globalSecrets,
 		cmd.varSourcePool,
 	)
 
@@ -1766,7 +1748,7 @@ func (cmd *RunCommand) constructAPIHandler(
 	resourceConfigFactory db.ResourceConfigFactory,
 	dbUserFactory db.UserFactory,
 	workerClient worker.Client,
-	secretManager creds.Secrets,
+	globalSecrets creds.Secrets,
 	credsManagers creds.Managers,
 	accessFactory accessor.AccessFactory,
 	dbWall db.Wall,
@@ -1852,7 +1834,7 @@ func (cmd *RunCommand) constructAPIHandler(
 		cmd.CLIArtifactsDir.Path(),
 		concourse.Version,
 		concourse.WorkerVersion,
-		secretManager,
+		globalSecrets,
 		cmd.varSourcePool,
 		credsManagers,
 		containerserver.NewInterceptTimeoutFactory(cmd.InterceptIdleTimeout),

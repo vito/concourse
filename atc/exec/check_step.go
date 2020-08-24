@@ -16,6 +16,12 @@ import (
 	"github.com/concourse/concourse/tracing"
 )
 
+type CheckDelegate interface {
+	BuildStepDelegate
+
+	Resource() *db.Resource
+}
+
 type CheckStep struct {
 	planID            atc.PlanID
 	plan              atc.CheckPlan
@@ -47,7 +53,6 @@ func NewCheckStep(
 	planID atc.PlanID,
 	plan atc.CheckPlan,
 	resource db.Resource,
-	scope db.ResourceConfigScope,
 	resourceConfigFactory db.ResourceConfigFactory,
 	metadata StepMetadata,
 	resourceFactory resource.ResourceFactory,
@@ -142,9 +147,12 @@ func (step *CheckStep) run(ctx context.Context, state RunState) error {
 		}
 	}
 
-	timeout, err := time.ParseDuration(step.plan.Timeout)
-	if err != nil {
-		return fmt.Errorf("timeout parse: %w", err)
+	var timeout time.Duration = time.Hour // XXX: put this default somewhere
+	if step.plan.Timeout != "" {
+		timeout, err = time.ParseDuration(step.plan.Timeout)
+		if err != nil {
+			return fmt.Errorf("timeout parse: %w", err)
+		}
 	}
 
 	containerSpec := worker.ContainerSpec{
@@ -198,7 +206,7 @@ func (step *CheckStep) run(ctx context.Context, state RunState) error {
 		return fmt.Errorf("run check step: %w", err)
 	}
 
-	scope, err := resourceConfig.FindOrCreateScope(step.resource)
+	scope, err := resourceConfig.FindOrCreateScope(step.resource, step.plan.VersionedResourceTypes)
 	if err != nil {
 		return fmt.Errorf("find or create scope: %w", err)
 	}
@@ -208,10 +216,16 @@ func (step *CheckStep) run(ctx context.Context, state RunState) error {
 		return fmt.Errorf("save versions: %w", err)
 	}
 
-	// XXX: update resource's config and scope, now that versions have been saved
-	err = step.resource.SetResourceConfigScope(scope)
-	if err != nil {
-		return fmt.Errorf("update resource config scope: %w", err)
+	// XXX: update resource's config and scope, *after* saving the versions
+	//
+	// it is important that this happens after saving the versions to prevent
+	// brief flickers of time where the resource is associated to a scope that
+	// has no versions
+	if step.resource != nil {
+		err = step.resource.SetResourceConfigScope(scope)
+		if err != nil {
+			return fmt.Errorf("update resource config scope: %w", err)
+		}
 	}
 
 	if len(result.Versions) > 0 {

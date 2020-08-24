@@ -9,33 +9,30 @@ import (
 	"github.com/concourse/concourse/atc/db"
 )
 
-type SchedulerResource interface {
-	StepConfig() atc.StepConfig
-	Resources() db.SchedulerResources
-	ResourceTypes() atc.VersionedResourceTypes
-
-	RefreshResourceConfig() (db.ResourceConfigScope, error)
-}
-
 type Factory interface {
-	ResourcesToSchedule(time.Duration, time.Duration) ([]SchedulerResource, error)
+	// returns all pipeline resources which are to be scheduled
+	ResourcesToSchedule(time.Duration, time.Duration) ([]db.SchedulerResource, error)
 }
 
 type Planner interface {
 	Create(
 		atc.StepConfig,
-		db.SchedulerResources,
+		db.NamedResources,
 		atc.VersionedResourceTypes,
 		[]db.BuildInput,
 	) (atc.Plan, error)
+}
+
+type IntervalConfig struct {
+	DefaultCheckInterval        time.Duration
+	DefaultWebhookCheckInterval time.Duration
 }
 
 type BuildScheduler struct {
 	Factory Factory
 	Planner Planner
 
-	DefaultCheckInterval        time.Duration
-	DefaultWebhookCheckInterval time.Duration
+	IntervalConfig
 }
 
 func (scheduler BuildScheduler) Run(context.Context) error {
@@ -57,17 +54,24 @@ func (scheduler BuildScheduler) Run(context.Context) error {
 		// checked, update resource_config_id and resource_config_scope_id
 		//
 		// if value changes, request scheduling for downstream jobs
-		scope, err := resource.RefreshResourceConfig()
+		scope, ok, err := resource.RefreshResourceConfig()
 		if err != nil {
 			// XXX: expect to get here if an ancestor type has no version?
 			return fmt.Errorf("update resource config: %w", err)
 		}
 
-		// make sure we haven't already queued a check for the same scope
-		if alreadyChecked[scope.ID()] {
-			continue
+		if ok {
+			// make sure we haven't already queued a check for the same scope
+			if alreadyChecked[scope.ID()] {
+				continue
+			} else {
+				alreadyChecked[scope.ID()] = true
+			}
 		} else {
-			alreadyChecked[scope.ID()] = true
+			// scope cannot be created; parent type must not have a version yet.
+			//
+			// the plan we construct will have a check and get for the parent type's
+			// image, and the resource's scope be set by the check step instead
 		}
 
 		// create a build plan with unevaluated creds
@@ -78,16 +82,31 @@ func (scheduler BuildScheduler) Run(context.Context) error {
 		// check step will save versions to scope at runtime
 		//
 		// check step will update associated resource or resource type's
-		// resource_config_id and resource_config_scope_id
+		// resource_config_id and resource_config_scope_id if needed (i.e. cred
+		// rotation)
 		plan, err := scheduler.Planner.Create(
 			resource.StepConfig(),
-			resource.Resources(),     // NOTE: unevaluated creds
-			resource.ResourceTypes(), // NOTE: unevaluated creds
+			resource.NamedResources(), // NOTE: unevaluated creds
+			resource.ResourceTypes(),  // NOTE: unevaluated creds
 			[]db.BuildInput{},
 		)
 		if err != nil {
 			// XXX: probably shouldn't bail on the whole thing
 			return fmt.Errorf("create build plan: %w", err)
+		}
+
+		build, err := resource.CreateBuild()
+		if err != nil {
+			return fmt.Errorf("create build: %w", err)
+		}
+
+		started, err := build.Start(plan)
+		if err != nil {
+			return fmt.Errorf("start build: %w", err)
+		}
+
+		if !started {
+			// XXX: is this possible?
 		}
 	}
 

@@ -17,7 +17,7 @@ func NewPlanner(planFactory atc.PlanFactory) Planner {
 
 func (planner Planner) Create(
 	planConfig atc.StepConfig,
-	resources db.SchedulerResources, // TODO: move to atc.PlanResources
+	resources db.NamedResources, // TODO: move to atc.PlanResources
 	resourceTypes atc.VersionedResourceTypes,
 	inputs []db.BuildInput,
 ) (atc.Plan, error) {
@@ -40,7 +40,7 @@ func (planner Planner) Create(
 type planVisitor struct {
 	planFactory atc.PlanFactory
 
-	resources     db.SchedulerResources
+	resources     db.NamedResources
 	resourceTypes atc.VersionedResourceTypes
 	inputs        []db.BuildInput
 
@@ -306,9 +306,9 @@ func (visitor *planVisitor) VisitAcross(step *atc.AcrossStep) error {
 	}
 
 	acrossPlan := atc.AcrossPlan{
-		Vars:        vars,
-		Steps:       []atc.VarScopedPlan{},
-		FailFast:    step.FailFast,
+		Vars:     vars,
+		Steps:    []atc.VarScopedPlan{},
+		FailFast: step.FailFast,
 	}
 	for _, vals := range cartesianProduct(step.Vars) {
 		err := step.Step.Visit(visitor)
@@ -316,7 +316,7 @@ func (visitor *planVisitor) VisitAcross(step *atc.AcrossStep) error {
 			return err
 		}
 		acrossPlan.Steps = append(acrossPlan.Steps, atc.VarScopedPlan{
-			Step:  visitor.plan,
+			Step:   visitor.plan,
 			Values: vals,
 		})
 	}

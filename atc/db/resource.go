@@ -61,9 +61,13 @@ type Resource interface {
 	PinVersion(rcvID int) (bool, error)
 	UnpinVersion() error
 
-	SetResourceConfig(atc.Source, atc.VersionedResourceTypes) (ResourceConfigScope, error)
+	SetResourceConfig(atc.Source, atc.VersionedResourceTypes) (ResourceConfigScope, bool, error)
+	SetResourceConfigScope(ResourceConfigScope) error
+
 	SetCheckSetupError(error) error
 	NotifyScan() error
+
+	CreateBuild() (Build, error)
 
 	Reload() (bool, error)
 }
@@ -188,22 +192,27 @@ func (r *resource) Reload() (bool, error) {
 	return true, nil
 }
 
-func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.VersionedResourceTypes) (ResourceConfigScope, error) {
+func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.VersionedResourceTypes) (ResourceConfigScope, bool, error) {
 	resourceConfigDescriptor, err := constructResourceConfigDescriptor(r.type_, source, resourceTypes)
 	if err != nil {
-		return nil, err
+		var noVersion ParentTypeHasNoVersionError
+		if errors.As(err, &noVersion) {
+			return nil, false, nil
+		}
+
+		return nil, false, err
 	}
 
 	tx, err := r.conn.Begin()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	defer Rollback(tx)
 
 	resourceConfig, err := resourceConfigDescriptor.findOrCreate(tx, r.lockFactory, r.conn)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	_, err = psql.Update("resources").
@@ -216,12 +225,12 @@ func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.Versio
 		RunWith(tx).
 		Exec()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, r.conn, r.lockFactory, resourceConfig, r, r.type_, resourceTypes)
+	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, r.conn, r.lockFactory, resourceConfig, r, resourceTypes)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	results, err := psql.Update("resources").
@@ -234,19 +243,68 @@ func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.Versio
 		RunWith(tx).
 		Exec()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	rowsAffected, err := results.RowsAffected()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if rowsAffected > 0 {
 		err = requestScheduleForJobsUsingResource(tx, r.id)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, false, err
+	}
+
+	return resourceConfigScope, true, nil
+}
+
+func (r *resource) SetResourceConfigScope(scope ResourceConfigScope) error {
+	_, err := psql.Update("resources").
+		Set("resource_config_id", scope.ResourceConfig().ID()).
+		Set("resource_config_scope_id", scope.ID()).
+		Where(sq.Eq{"id": r.id}).
+		Where(sq.Or{
+			sq.Eq{"resource_config_id": nil},
+			sq.Eq{"resource_config_scope_id": nil},
+			sq.NotEq{"resource_config_id": scope.ResourceConfig().ID()},
+			sq.NotEq{"resource_config_scope_id": scope.ID()},
+		}).
+		RunWith(r.conn).
+		Exec()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *resource) CreateBuild() (Build, error) {
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	defer Rollback(tx)
+
+	build := newEmptyBuild(r.conn, r.lockFactory)
+	err = createBuild(tx, build, map[string]interface{}{
+		"name":               sq.Expr("nextval('one_off_name')"), // XXX: TODO?
+		"resource_id":        r.id,                               // XXX: create migration
+		"pipeline_id":        r.pipelineID,
+		"team_id":            r.teamID,
+		"status":             BuildStatusPending,
+		"manually_triggered": true, // XXX: parameterize this, set to true for API requested checks
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	err = tx.Commit()
@@ -254,7 +312,7 @@ func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.Versio
 		return nil, err
 	}
 
-	return resourceConfigScope, nil
+	return build, nil
 }
 
 func (r *resource) SetCheckSetupError(cause error) error {
@@ -289,7 +347,7 @@ func (r *resource) SaveUncheckedVersion(version atc.Version, metadata ResourceCo
 
 	defer Rollback(tx)
 
-	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, r.conn, r.lockFactory, resourceConfig, r, r.type_, resourceTypes)
+	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, r.conn, r.lockFactory, resourceConfig, r, resourceTypes)
 	if err != nil {
 		return false, err
 	}

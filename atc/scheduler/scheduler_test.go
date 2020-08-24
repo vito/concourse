@@ -62,7 +62,7 @@ var _ = Describe("Scheduler", func() {
 				lagertest.NewTestLogger("test"),
 				db.SchedulerJob{
 					Job: fakeJob,
-					Resources: db.SchedulerResources{
+					Resources: db.NamedResources{
 						{
 							Name: "some-resource",
 						},

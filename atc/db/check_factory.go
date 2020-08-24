@@ -4,11 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"time"
 
 	"code.cloudfoundry.org/lager"
-	"code.cloudfoundry.org/lager/lagerctx"
 	sq "github.com/Masterminds/squirrel"
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/atc/creds"
@@ -33,11 +32,6 @@ type Checkable interface {
 	CurrentPinnedVersion() atc.Version
 
 	HasWebhook() bool
-
-	SetResourceConfig(
-		atc.Source,
-		atc.VersionedResourceTypes,
-	) (ResourceConfigScope, error)
 
 	SetCheckSetupError(error) error
 }
@@ -138,113 +132,116 @@ func (c *checkFactory) StartedChecks() ([]Check, error) {
 }
 
 func (c *checkFactory) TryCreateCheck(ctx context.Context, checkable Checkable, resourceTypes ResourceTypes, fromVersion atc.Version, manuallyTriggered bool) (Check, bool, error) {
-	logger := lagerctx.FromContext(ctx)
+	// XXX: removed
+	return nil, false, errors.New("stubbed")
 
-	var err error
+	// logger := lagerctx.FromContext(ctx)
 
-	parentType, found := resourceTypes.Parent(checkable)
-	if found {
-		if parentType.Version() == nil {
-			return nil, false, fmt.Errorf("resource type '%s' has no version", parentType.Name())
-		}
-	}
+	// var err error
 
-	timeout := c.defaultCheckTimeout
-	if to := checkable.CheckTimeout(); to != "" {
-		timeout, err = time.ParseDuration(to)
-		if err != nil {
-			return nil, false, err
-		}
-	}
+	// parentType, found := resourceTypes.Parent(checkable)
+	// if found {
+	// 	if parentType.Version() == nil {
+	// 		return nil, false, fmt.Errorf("resource type '%s' has no version", parentType.Name())
+	// 	}
+	// }
 
-	pp, found, err := checkable.Pipeline()
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to reload pipeline: %s", err.Error())
-	}
-	if !found {
-		return nil, false, fmt.Errorf("pipeline not found")
-	}
+	// timeout := c.defaultCheckTimeout
+	// if to := checkable.CheckTimeout(); to != "" {
+	// 	timeout, err = time.ParseDuration(to)
+	// 	if err != nil {
+	// 		return nil, false, err
+	// 	}
+	// }
 
-	varss, err := pp.Variables(logger, c.secrets, c.varSourcePool)
-	if err != nil {
-		return nil, false, err
-	}
+	// pp, found, err := checkable.Pipeline()
+	// if err != nil {
+	// 	return nil, false, fmt.Errorf("failed to reload pipeline: %s", err.Error())
+	// }
+	// if !found {
+	// 	return nil, false, fmt.Errorf("pipeline not found")
+	// }
 
-	source, err := creds.NewSource(varss, checkable.Source()).Evaluate()
-	if err != nil {
-		return nil, false, err
-	}
+	// varss, err := pp.Variables(logger, c.secrets, c.varSourcePool)
+	// if err != nil {
+	// 	return nil, false, err
+	// }
 
-	filteredTypes := resourceTypes.Filter(checkable).Deserialize()
-	versionedResourceTypes, err := creds.NewVersionedResourceTypes(varss, filteredTypes).Evaluate()
-	if err != nil {
-		return nil, false, err
-	}
+	// source, err := creds.NewSource(varss, checkable.Source()).Evaluate()
+	// if err != nil {
+	// 	return nil, false, err
+	// }
+
+	// filteredTypes := resourceTypes.Filter(checkable).Deserialize()
+	// versionedResourceTypes, err := creds.NewVersionedResourceTypes(varss, filteredTypes).Evaluate()
+	// if err != nil {
+	// 	return nil, false, err
+	// }
 
 	// This could have changed based on new variable interpolation so update it
-	resourceConfigScope, err := checkable.SetResourceConfig(source, versionedResourceTypes)
-	if err != nil {
-		return nil, false, err
-	}
+	// resourceConfigScope, err := checkable.SetResourceConfig(source, versionedResourceTypes)
+	// if err != nil {
+	// 	return nil, false, err
+	// }
 
-	if fromVersion == nil {
-		rcv, found, err := resourceConfigScope.LatestVersion()
-		if err != nil {
-			return nil, false, err
-		}
+	// if fromVersion == nil {
+	// 	rcv, found, err := resourceConfigScope.LatestVersion()
+	// 	if err != nil {
+	// 		return nil, false, err
+	// 	}
 
-		if found {
-			fromVersion = atc.Version(rcv.Version())
-		}
-	}
+	// 	if found {
+	// 		fromVersion = atc.Version(rcv.Version())
+	// 	}
+	// }
 
-	checkPlanConfig := atc.CheckPlan{
-		Name:        checkable.Name(),
-		Source:      checkable.Source(),
-		Tags:        checkable.Tags(),
-		Timeout:     timeout.String(),
-		FromVersion: fromVersion,
+	// 	checkPlanConfig := atc.CheckPlan{
+	// 		Name:        checkable.Name(),
+	// 		Source:      checkable.Source(),
+	// 		Tags:        checkable.Tags(),
+	// 		Timeout:     timeout.String(),
+	// 		FromVersion: fromVersion,
 
-		VersionedResourceTypes: filteredTypes,
-	}
+	// 		VersionedResourceTypes: filteredTypes,
+	// 	}
 
-	// XXX
-	planFactory := atc.NewPlanFactory(0)
+	// 	// XXX
+	// 	planFactory := atc.NewPlanFactory(0)
 
-	var plan atc.Plan
-	imagePlan, hasImage := versionedResourceTypes.FetchType(checkable.Type(), planFactory)
-	if hasImage {
-		checkPlanConfig.TypeFrom = &imagePlan.ID
-		plan = planFactory.NewPlan(atc.OnSuccessPlan{
-			Step: imagePlan,
-			Next: planFactory.NewPlan(checkPlanConfig),
-		})
-	} else {
-		checkPlanConfig.Type = checkable.Type()
-		plan = planFactory.NewPlan(checkPlanConfig)
-	}
+	// 	var plan atc.Plan
+	// 	imagePlan, hasImage := versionedResourceTypes.FetchType(checkable.Type(), planFactory)
+	// 	if hasImage {
+	// 		checkPlanConfig.TypeFrom = &imagePlan.ID
+	// 		plan = planFactory.NewPlan(atc.OnSuccessPlan{
+	// 			Step: imagePlan,
+	// 			Next: planFactory.NewPlan(checkPlanConfig),
+	// 		})
+	// 	} else {
+	// 		checkPlanConfig.Type = checkable.Type()
+	// 		plan = planFactory.NewPlan(checkPlanConfig)
+	// 	}
 
-	meta := CheckMetadata{
-		TeamID:             checkable.TeamID(),
-		TeamName:           checkable.TeamName(),
-		PipelineName:       checkable.PipelineName(),
-		PipelineID:         checkable.PipelineID(),
-		ResourceConfigID:   resourceConfigScope.ResourceConfig().ID(),
-		BaseResourceTypeID: resourceConfigScope.ResourceConfig().OriginBaseResourceType().ID,
-	}
+	// 	meta := CheckMetadata{
+	// 		TeamID:       checkable.TeamID(),
+	// 		TeamName:     checkable.TeamName(),
+	// 		PipelineName: checkable.PipelineName(),
+	// 		PipelineID:   checkable.PipelineID(),
+	// ResourceConfigID:   resourceConfigScope.ResourceConfig().ID(),
+	// BaseResourceTypeID: resourceConfigScope.ResourceConfig().OriginBaseResourceType().ID,
+	// }
 
-	check, created, err := c.CreateCheck(
-		resourceConfigScope.ID(),
-		manuallyTriggered,
-		plan,
-		meta,
-		NewSpanContext(ctx),
-	)
-	if err != nil {
-		return nil, false, err
-	}
+	// check, created, err := c.CreateCheck(
+	// 	resourceConfigScope.ID(),
+	// 	manuallyTriggered,
+	// 	plan,
+	// 	meta,
+	// 	NewSpanContext(ctx),
+	// )
+	// if err != nil {
+	// 	return nil, false, err
+	// }
 
-	return check, created, nil
+	// return check, created, nil
 }
 
 func (c *checkFactory) CreateCheck(

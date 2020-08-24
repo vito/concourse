@@ -91,7 +91,7 @@ var _ = Describe("Runner", func() {
 			fakeJobFactory.JobsToScheduleReturns([]db.SchedulerJob{
 				{
 					Job: fakeJob1,
-					Resources: db.SchedulerResources{
+					Resources: db.NamedResources{
 						{
 							Name:   "some-resource",
 							Type:   "git",
@@ -106,7 +106,7 @@ var _ = Describe("Runner", func() {
 				},
 				{
 					Job: fakeJob2,
-					Resources: db.SchedulerResources{
+					Resources: db.NamedResources{
 						{
 							Name:   "some-resource",
 							Type:   "git",
@@ -175,7 +175,7 @@ var _ = Describe("Runner", func() {
 
 					jobs := []string{}
 					_, _, job := fakeScheduler.ScheduleArgsForCall(0)
-					Expect(job.Resources).To(Equal(db.SchedulerResources{
+					Expect(job.Resources).To(Equal(db.NamedResources{
 						{
 							Name:   "some-resource",
 							Type:   "git",
@@ -190,7 +190,7 @@ var _ = Describe("Runner", func() {
 					jobs = append(jobs, job.Name())
 
 					_, _, job = fakeScheduler.ScheduleArgsForCall(1)
-					Expect(job.Resources).To(Equal(db.SchedulerResources{
+					Expect(job.Resources).To(Equal(db.NamedResources{
 						{
 							Name:   "some-resource",
 							Type:   "git",
@@ -231,7 +231,7 @@ var _ = Describe("Runner", func() {
 						fakeJobFactory.JobsToScheduleReturns([]db.SchedulerJob{
 							{
 								Job: fakeJob1,
-								Resources: db.SchedulerResources{
+								Resources: db.NamedResources{
 									{
 										Name:   "some-resource",
 										Type:   "git",
@@ -241,7 +241,7 @@ var _ = Describe("Runner", func() {
 							},
 							{
 								Job: fakeJob1,
-								Resources: db.SchedulerResources{
+								Resources: db.NamedResources{
 									{
 										Name:   "some-resource",
 										Type:   "git",
@@ -360,7 +360,7 @@ var _ = Describe("Runner", func() {
 				_, _, job := fakeScheduler.ScheduleArgsForCall(0)
 				Expect(job).To(Equal(db.SchedulerJob{
 					Job: fakeJob2,
-					Resources: db.SchedulerResources{
+					Resources: db.NamedResources{
 						{
 							Name:   "some-resource",
 							Type:   "git",
@@ -430,7 +430,7 @@ var _ = Describe("Runner", func() {
 				fakeJobFactory.JobsToScheduleReturns([]db.SchedulerJob{
 					{
 						Job: fakeJob1,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-resource",
 								Type:   "git",
@@ -440,7 +440,7 @@ var _ = Describe("Runner", func() {
 					},
 					{
 						Job: fakeJob2,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-dependent-resource",
 								Type:   "git",
@@ -450,7 +450,7 @@ var _ = Describe("Runner", func() {
 					},
 					{
 						Job: fakeJob3,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-dependent-resource",
 								Type:   "git",
@@ -460,7 +460,7 @@ var _ = Describe("Runner", func() {
 					},
 					{
 						Job: fakeJob4,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-resource",
 								Type:   "git",
@@ -499,7 +499,7 @@ var _ = Describe("Runner", func() {
 				fakeJobFactory.JobsToScheduleReturns([]db.SchedulerJob{
 					{
 						Job: fakeJob1,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-resource",
 								Type:   "git",
@@ -509,7 +509,7 @@ var _ = Describe("Runner", func() {
 					},
 					{
 						Job: fakeJob2,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-dependent-resource",
 								Type:   "git",
@@ -519,7 +519,7 @@ var _ = Describe("Runner", func() {
 					},
 					{
 						Job: fakeJob3,
-						Resources: db.SchedulerResources{
+						Resources: db.NamedResources{
 							{
 								Name:   "some-dependent-resource",
 								Type:   "git",

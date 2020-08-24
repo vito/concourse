@@ -19,6 +19,7 @@ import (
 // trying to encapsulate or considering splitting this out!
 type JobFactory interface {
 	VisibleJobs([]string) (atc.Dashboard, error)
+
 	AllActiveJobs() (atc.Dashboard, error)
 	JobsToSchedule() (SchedulerJobs, error)
 }
@@ -39,7 +40,7 @@ type SchedulerJobs []SchedulerJob
 
 type SchedulerJob struct {
 	Job
-	Resources     SchedulerResources
+	Resources     NamedResources
 	ResourceTypes atc.VersionedResourceTypes
 }
 
@@ -49,7 +50,7 @@ func (j *jobFactory) JobsToSchedule() (SchedulerJobs, error) {
 		return nil, err
 	}
 
-	defer tx.Rollback()
+	defer Rollback(tx)
 
 	rows, err := jobsQuery.
 		Where(sq.Expr("j.schedule_requested > j.last_scheduled")).
@@ -114,7 +115,7 @@ func (j *jobFactory) JobsToSchedule() (SchedulerJobs, error) {
 			return nil, err
 		}
 
-		var schedulerResources SchedulerResources
+		var schedulerResources NamedResources
 		for rows.Next() {
 			var name, type_ string
 			var configBlob []byte
@@ -145,7 +146,7 @@ func (j *jobFactory) JobsToSchedule() (SchedulerJobs, error) {
 				return nil, err
 			}
 
-			schedulerResources = append(schedulerResources, SchedulerResource{
+			schedulerResources = append(schedulerResources, NamedResource{
 				Name:   name,
 				Type:   type_,
 				Source: config.Source,

@@ -49,7 +49,7 @@ type ResourceConfig interface {
 	CreatedByBaseResourceType() *UsedBaseResourceType
 	OriginBaseResourceType() *UsedBaseResourceType
 
-	FindOrCreateScope(Resource) (ResourceConfigScope, error)
+	FindOrCreateScope(Resource, atc.VersionedResourceTypes) (ResourceConfigScope, error)
 	FindResourceConfigScopeByID(int, Resource) (ResourceConfigScope, bool, error)
 }
 
@@ -74,10 +74,32 @@ func (r *resourceConfig) OriginBaseResourceType() *UsedBaseResourceType {
 	return r.createdByResourceCache.ResourceConfig().OriginBaseResourceType()
 }
 
-func (r *resourceConfig) FindOrCreateScope(resource Resource) (ResourceConfigScope, error) {
-	// XXX
-	// XXX accept nil resource for 'global'
-	return nil, nil
+func (r *resourceConfig) FindOrCreateScope(resource Resource, types atc.VersionedResourceTypes) (ResourceConfigScope, error) {
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return nil, err
+	}
+
+	defer Rollback(tx)
+
+	scope, err := findOrCreateResourceConfigScope(
+		tx,
+		r.conn,
+		r.lockFactory,
+		r,
+		resource,
+		types,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return scope, nil
 }
 
 func (r *resourceConfig) FindResourceConfigScopeByID(resourceConfigScopeID int, resource Resource) (ResourceConfigScope, bool, error) {
@@ -293,7 +315,6 @@ func findOrCreateResourceConfigScope(
 	lockFactory lock.LockFactory,
 	resourceConfig ResourceConfig,
 	resource Resource,
-	resourceType string,
 	resourceTypes atc.VersionedResourceTypes,
 ) (ResourceConfigScope, error) {
 
@@ -305,7 +326,7 @@ func findOrCreateResourceConfigScope(
 		if !atc.EnableGlobalResources {
 			unique = true
 		} else {
-			customType, found := resourceTypes.Lookup(resourceType)
+			customType, found := resourceTypes.Lookup(resource.Type())
 			if found {
 				unique = customType.UniqueVersionHistory
 			} else {
