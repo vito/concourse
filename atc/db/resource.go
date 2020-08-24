@@ -65,6 +65,7 @@ type Resource interface {
 	SetResourceConfigScope(ResourceConfigScope) error
 
 	CheckPlan(atc.Version, time.Duration, time.Duration, atc.VersionedResourceTypes) atc.CheckPlan
+	CreateBuild(bool) (Build, bool, error)
 
 	SetCheckSetupError(error) error
 	NotifyScan() error
@@ -309,6 +310,58 @@ func (r *resource) CheckPlan(from atc.Version, interval, timeout time.Duration, 
 
 		UpdateResource: r.Name(),
 	}
+}
+
+func (r *resource) CreateBuild(manuallyTriggered bool) (Build, bool, error) {
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+
+	defer Rollback(tx)
+
+	params := map[string]interface{}{
+		"name":               sq.Expr("nextval('one_off_name')"),
+		"pipeline_id":        r.pipelineID,
+		"team_id":            r.teamID,
+		"status":             BuildStatusPending,
+		"manually_triggered": manuallyTriggered,
+	}
+
+	if !manuallyTriggered {
+		params["resource_id"] = r.id
+	}
+
+	_, err = psql.Delete("builds").
+		Where(sq.Eq{
+			"resource_id": r.id,
+			"completed":   true,
+		}).
+		RunWith(tx).
+		Exec()
+	if err != nil {
+		return nil, false, fmt.Errorf("delete previous build: %w", err)
+	}
+
+	build := newEmptyBuild(r.conn, r.lockFactory)
+	err = createBuild(tx, build, params)
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == pqUniqueViolationErrCode {
+			return nil, false, nil
+		}
+
+		// XXX(check-resource): we could add a unique constraint for resource_id to
+		// ensure there's only one build at a time, and only do this if the current
+		// one is finished
+		return nil, false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, false, err
+	}
+
+	return build, true, nil
 }
 
 func (r *resource) SetCheckSetupError(cause error) error {

@@ -14,7 +14,6 @@ import (
 	"github.com/concourse/concourse/atc/db"
 	"github.com/concourse/concourse/atc/metric"
 	"github.com/concourse/concourse/tracing"
-	"github.com/pkg/errors"
 )
 
 func NewScanner(
@@ -90,37 +89,23 @@ func (s *scanner) Run(ctx context.Context) error {
 	return s.checkFactory.NotifyChecker()
 }
 
-func (s *scanner) check(ctx context.Context, checkable db.Checkable, resourceTypes db.ResourceTypes, resourceTypesChecked *sync.Map) error {
+func (s *scanner) check(ctx context.Context, resource db.Resource, resourceTypes db.ResourceTypes, resourceTypesChecked *sync.Map) error {
 
 	var err error
 
 	spanCtx, span := tracing.StartSpan(ctx, "scanner.check", tracing.Attrs{
-		"team":                     checkable.TeamName(),
-		"pipeline":                 checkable.PipelineName(),
-		"resource":                 checkable.Name(),
-		"type":                     checkable.Type(),
-		"resource_config_scope_id": strconv.Itoa(checkable.ResourceConfigScopeID()),
+		"team":                     resource.TeamName(),
+		"pipeline":                 resource.PipelineName(),
+		"resource":                 resource.Name(),
+		"type":                     resource.Type(),
+		"resource_config_scope_id": strconv.Itoa(resource.ResourceConfigScopeID()),
 	})
 	defer span.End()
 
-	parentType, found := resourceTypes.Parent(checkable)
-	if found {
-		if _, exists := resourceTypesChecked.LoadOrStore(parentType.ID(), true); !exists {
-			// only create a check for resource type if it has not been checked yet
-			err = s.check(spanCtx, parentType, resourceTypes, resourceTypesChecked)
-			s.setCheckError(s.logger, parentType, err)
-
-			if err != nil {
-				s.logger.Error("failed-to-create-type-check", err)
-				return errors.Wrapf(err, "parent type '%v' error", parentType.Name())
-			}
-		}
-	}
-
 	// XXX(check-refactor): don't forget this: check from pinned version if set
-	version := checkable.CurrentPinnedVersion()
+	version := resource.CurrentPinnedVersion()
 
-	_, created, err := s.checkFactory.TryCreateCheck(lagerctx.NewContext(spanCtx, s.logger), checkable, resourceTypes, version, false)
+	_, created, err := s.checkFactory.TryCreateCheck(lagerctx.NewContext(spanCtx, s.logger), resource, resourceTypes, version, false)
 	if err != nil {
 		s.logger.Error("failed-to-create-check", err)
 		return err

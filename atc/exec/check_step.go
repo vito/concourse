@@ -154,6 +154,11 @@ func (step *CheckStep) run(ctx context.Context, state RunState) error {
 		if err != nil {
 			return fmt.Errorf("save versions: %w", err)
 		}
+
+		_, err = scope.UpdateLastCheckEndTime()
+		if err != nil {
+			return fmt.Errorf("update scope last check end time: %w", err)
+		}
 	}
 
 	// XXX(global-resources): set config instead of scope once scopes are

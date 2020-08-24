@@ -110,7 +110,7 @@ func (r *resourceConfig) FindResourceConfigScopeByID(resourceConfigScopeID int, 
 		checkErrBlob sql.NullString
 	)
 
-	err := psql.Select("id, resource_id, resource_config_id, check_error, last_check_end_time").
+	err := psql.Select("id, resource_id, resource_config_id, check_error").
 		From("resource_config_scopes").
 		Where(sq.Eq{
 			"id":                 resourceConfigScopeID,
@@ -343,7 +343,7 @@ func findOrCreateResourceConfigScope(
 	var scopeID int
 	var checkErr error
 
-	rows, err := psql.Select("id, check_error, last_check_end_time").
+	rows, err := psql.Select("id, check_error").
 		From("resource_config_scopes").
 		Where(sq.Eq{
 			"resource_id":        resourceID,

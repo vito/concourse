@@ -2,8 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -41,14 +39,15 @@ type Checkable interface {
 
 	CheckPlan(atc.Version, time.Duration, time.Duration, atc.VersionedResourceTypes) atc.CheckPlan
 
+	CreateBuild(bool) (Build, bool, error)
+
 	SetCheckSetupError(error) error
 }
 
 //go:generate counterfeiter . CheckFactory
 
 type CheckFactory interface {
-	CreateCheck(int, bool, atc.Plan, CheckMetadata, SpanContext) (Check, bool, error)
-	TryCreateCheck(context.Context, Checkable, ResourceTypes, atc.Version, bool) (Check, bool, error)
+	TryCreateCheck(context.Context, Checkable, ResourceTypes, atc.Version, bool) (Build, bool, error)
 	Resources() ([]Resource, error)
 	ResourceTypes() ([]ResourceType, error)
 	AcquireScanningLock(lager.Logger) (lock.Lock, bool, error)
@@ -100,178 +99,96 @@ func (c *checkFactory) AcquireScanningLock(logger lager.Logger) (lock.Lock, bool
 	)
 }
 
-func (c *checkFactory) TryCreateCheck(ctx context.Context, checkable Checkable, resourceTypes ResourceTypes, fromVersion atc.Version, manuallyTriggered bool) (Check, bool, error) {
+func (c *checkFactory) TryCreateCheck(ctx context.Context, leaf Checkable, resourceTypes ResourceTypes, fromVersion atc.Version, manuallyTriggered bool) (Build, bool, error) {
 	logger := lagerctx.FromContext(ctx)
 
-	var err error
+	ancestry := resourceTypes.Filter(leaf)
+	checkables := make([]Checkable, len(ancestry))
+	for i, a := range ancestry {
+		checkables[i] = a
+	}
 
-	parentType, found := resourceTypes.Parent(checkable)
-	if found {
-		// XXX(check-refactor): this seems important
-		if parentType.Version() == nil {
-			return nil, false, fmt.Errorf("resource type '%s' has no version", parentType.Name())
+	checkables = append(checkables, leaf)
+
+	pf := atc.NewPlanFactory(0) // XXX(check-refactor): what ID to use?
+	var checkPlans []atc.Plan
+	for _, checkable := range checkables {
+		parentType, found := ancestry.Parent(checkable)
+		if found {
+			if parentType.Version() == nil {
+				// XXX(check-refactor): this used to error - now we just stop
+				break
+			}
 		}
-	}
 
-	interval := c.defaultCheckInterval
-	if checkable.HasWebhook() {
-		interval = c.defaultWithWebhookCheckInterval
-	}
-	if every := checkable.CheckEvery(); every != "" {
-		interval, err = time.ParseDuration(every)
-		if err != nil {
-			return nil, false, fmt.Errorf("check interval: %s", err)
+		var err error
+
+		interval := c.defaultCheckInterval
+		if checkable.HasWebhook() {
+			interval = c.defaultWithWebhookCheckInterval
 		}
+		if every := checkable.CheckEvery(); every != "" {
+			interval, err = time.ParseDuration(every)
+			if err != nil {
+				return nil, false, fmt.Errorf("check interval: %s", err)
+			}
+		}
+
+		if !manuallyTriggered && time.Now().Before(checkable.LastCheckEndTime().Add(interval)) {
+			// skip creating the check if its interval hasn't elapsed yet
+			continue
+		}
+
+		timeout := c.defaultCheckTimeout
+		if to := checkable.CheckTimeout(); to != "" {
+			timeout, err = time.ParseDuration(to)
+			if err != nil {
+				return nil, false, fmt.Errorf("check timeout: %s", err)
+			}
+		}
+
+		filteredTypes := resourceTypes.Filter(checkable).Deserialize()
+
+		checkPlans = append(
+			checkPlans,
+			pf.NewPlan(checkable.CheckPlan(fromVersion, interval, timeout, filteredTypes)),
+		)
 	}
 
-	if time.Now().Before(checkable.LastCheckEndTime().Add(interval)) {
-		// skip creating the check if its interval hasn't elapsed yet
+	if len(checkPlans) == 0 {
+		// no checks queued; no intervals elapsed?
 		return nil, false, nil
 	}
 
-	timeout := c.defaultCheckTimeout
-	if to := checkable.CheckTimeout(); to != "" {
-		timeout, err = time.ParseDuration(to)
-		if err != nil {
-			return nil, false, fmt.Errorf("check timeout: %s", err)
-		}
-	}
-
-	filteredTypes := resourceTypes.Filter(checkable).Deserialize()
-
-	checkPlan := checkable.CheckPlan(fromVersion, interval, timeout, filteredTypes)
-
-	logger.Info("constructed-plan", lager.Data{
-		"plan": checkPlan,
+	checkPlan := pf.NewPlan(atc.InParallelPlan{
+		Steps: checkPlans,
 	})
 
-	return nil, false, nil
-
-	// plan := atc.Plan{
-	// 	// XXX(check-refactor): use plan factory
-	// 	ID: atc.PlanID("TODO"),
-
-	// 	Check: &checkPlan,
-	// }
-
-	// meta := CheckMetadata{
-	// 	TeamID:             checkable.TeamID(),
-	// 	TeamName:           checkable.TeamName(),
-	// 	PipelineName:       checkable.PipelineName(),
-	// 	PipelineID:         checkable.PipelineID(),
-	// 	ResourceConfigID:   resourceConfigScope.ResourceConfig().ID(),
-	// 	BaseResourceTypeID: resourceConfigScope.ResourceConfig().OriginBaseResourceType().ID,
-	// }
-
-	// check, created, err := c.CreateCheck(
-	// 	resourceConfigScope.ID(),
-	// 	manuallyTriggered,
-	// 	plan,
-	// 	meta,
-	// 	NewSpanContext(ctx),
-	// )
-	// if err != nil {
-	// 	return nil, false, err
-	// }
-
-	// return check, created, nil
-}
-
-func (c *checkFactory) CreateCheck(
-	resourceConfigScopeID int,
-	manuallyTriggered bool,
-	plan atc.Plan,
-	meta CheckMetadata,
-	sc SpanContext,
-) (Check, bool, error) {
-	tx, err := c.conn.Begin()
+	build, created, err := leaf.CreateBuild(manuallyTriggered)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("create build: %w", err)
 	}
 
-	defer Rollback(tx)
-
-	planPayload, err := json.Marshal(plan)
-	if err != nil {
-		return nil, false, err
+	if !created {
+		return nil, false, nil
 	}
 
-	es := c.conn.EncryptionStrategy()
-	encryptedPayload, nonce, err := es.Encrypt(planPayload)
+	started, err := build.Start(checkPlan)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("start build: %w", err)
 	}
 
-	metadata, err := json.Marshal(meta)
+	logger.Info("created-build", lager.Data{
+		"plan":    checkPlan,
+		"started": started,
+	})
+
+	_, err = build.Reload()
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("reload build: %w", err)
 	}
 
-	spanContext, err := json.Marshal(sc)
-	if err != nil {
-		return nil, false, err
-	}
-
-	var id int
-	var createTime time.Time
-	err = psql.Insert("checks").
-		Columns(
-			"resource_config_scope_id",
-			"schema",
-			"status",
-			"manually_triggered",
-			"plan",
-			"nonce",
-			"metadata",
-			"span_context",
-		).
-		Values(
-			resourceConfigScopeID,
-			schema,
-			CheckStatusStarted,
-			manuallyTriggered,
-			encryptedPayload,
-			nonce,
-			metadata,
-			spanContext,
-		).
-		Suffix(`
-			ON CONFLICT DO NOTHING
-			RETURNING id, create_time
-		`).
-		RunWith(tx).
-		QueryRow().
-		Scan(&id, &createTime)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return nil, false, err
-	}
-
-	return &check{
-		id:                    id,
-		resourceConfigScopeID: resourceConfigScopeID,
-		schema:                schema,
-		status:                CheckStatusStarted,
-		plan:                  plan,
-		createTime:            createTime,
-		metadata:              meta,
-
-		pipelineRef: pipelineRef{
-			conn:         c.conn,
-			lockFactory:  c.lockFactory,
-			pipelineID:   meta.PipelineID,
-			pipelineName: meta.PipelineName,
-		},
-
-		spanContext: sc,
-	}, true, err
+	return build, true, nil
 }
 
 func (c *checkFactory) Resources() ([]Resource, error) {
