@@ -49,14 +49,6 @@ type ResourceType interface {
 
 	SetResourceConfigScope(ResourceConfigScope) error
 
-	// XXX(check-refactor): might be able to remove this as we trend towards
-	// doing resource type checks only within build plans
-	//
-	// this is only needed because LIDAR still queues a build for each resource
-	// type - once it's inlined into the build plan this can go away, and we can
-	// rely on the 'check' step to do it
-	SetResourceConfig(atc.Source, atc.VersionedResourceTypes) (ResourceConfigScope, error)
-
 	CheckPlan(atc.Version, time.Duration, time.Duration, atc.VersionedResourceTypes) atc.CheckPlan
 	CreateBuild(bool) (Build, bool, error)
 
@@ -243,49 +235,6 @@ func (r *resourceType) SetResourceConfigScope(scope ResourceConfigScope) error {
 	}
 
 	return nil
-}
-
-func (t *resourceType) SetResourceConfig(source atc.Source, resourceTypes atc.VersionedResourceTypes) (ResourceConfigScope, error) {
-	resourceConfigDescriptor, err := constructResourceConfigDescriptor(t.type_, source, resourceTypes)
-	if err != nil {
-		return nil, err
-	}
-
-	tx, err := t.conn.Begin()
-	if err != nil {
-		return nil, err
-	}
-
-	defer Rollback(tx)
-
-	resourceConfig, err := resourceConfigDescriptor.findOrCreate(tx, t.lockFactory, t.conn)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = psql.Update("resource_types").
-		Set("resource_config_id", resourceConfig.ID()).
-		Where(sq.Eq{
-			"id": t.id,
-		}).
-		RunWith(tx).
-		Exec()
-	if err != nil {
-		return nil, err
-	}
-
-	// A nil value is passed into the Resource object parameter because we always want resource type versions to be shared
-	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, t.conn, t.lockFactory, resourceConfig, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return nil, err
-	}
-
-	return resourceConfigScope, nil
 }
 
 // XXX(check-refactor): unit test

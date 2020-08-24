@@ -61,7 +61,6 @@ type Resource interface {
 	PinVersion(rcvID int) (bool, error)
 	UnpinVersion() error
 
-	SetResourceConfig(atc.Source, atc.VersionedResourceTypes) (ResourceConfigScope, error)
 	SetResourceConfigScope(ResourceConfigScope) error
 
 	CheckPlan(atc.Version, time.Duration, time.Duration, atc.VersionedResourceTypes) atc.CheckPlan
@@ -236,75 +235,6 @@ func (r *resource) SetResourceConfigScope(scope ResourceConfigScope) error {
 	}
 
 	return nil
-}
-
-func (r *resource) SetResourceConfig(source atc.Source, resourceTypes atc.VersionedResourceTypes) (ResourceConfigScope, error) {
-	resourceConfigDescriptor, err := constructResourceConfigDescriptor(r.type_, source, resourceTypes)
-	if err != nil {
-		return nil, err
-	}
-
-	tx, err := r.conn.Begin()
-	if err != nil {
-		return nil, err
-	}
-
-	defer Rollback(tx)
-
-	resourceConfig, err := resourceConfigDescriptor.findOrCreate(tx, r.lockFactory, r.conn)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = psql.Update("resources").
-		Set("resource_config_id", resourceConfig.ID()).
-		Where(sq.Eq{"id": r.id}).
-		Where(sq.Or{
-			sq.Eq{"resource_config_id": nil},
-			sq.NotEq{"resource_config_id": resourceConfig.ID()},
-		}).
-		RunWith(tx).
-		Exec()
-	if err != nil {
-		return nil, err
-	}
-
-	resourceConfigScope, err := findOrCreateResourceConfigScope(tx, r.conn, r.lockFactory, resourceConfig, r)
-	if err != nil {
-		return nil, err
-	}
-
-	results, err := psql.Update("resources").
-		Set("resource_config_scope_id", resourceConfigScope.ID()).
-		Where(sq.Eq{"id": r.id}).
-		Where(sq.Or{
-			sq.Eq{"resource_config_scope_id": nil},
-			sq.NotEq{"resource_config_scope_id": resourceConfigScope.ID()},
-		}).
-		RunWith(tx).
-		Exec()
-	if err != nil {
-		return nil, err
-	}
-
-	rowsAffected, err := results.RowsAffected()
-	if err != nil {
-		return nil, err
-	}
-
-	if rowsAffected > 0 {
-		err = requestScheduleForJobsUsingResource(tx, r.id)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return nil, err
-	}
-
-	return resourceConfigScope, nil
 }
 
 // XXX(check-refactor): unit test
