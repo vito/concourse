@@ -195,7 +195,14 @@ func (r *resource) Reload() (bool, error) {
 
 // XXX(check-refactor): unit test
 func (r *resource) SetResourceConfigScope(scope ResourceConfigScope) error {
-	_, err := psql.Update("resources").
+	tx, err := r.conn.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer Rollback(tx)
+
+	results, err := psql.Update("resources").
 		Set("resource_config_id", scope.ResourceConfig().ID()).
 		Set("resource_config_scope_id", scope.ID()).
 		Where(sq.Eq{"id": r.id}).
@@ -205,8 +212,25 @@ func (r *resource) SetResourceConfigScope(scope ResourceConfigScope) error {
 			sq.NotEq{"resource_config_id": scope.ResourceConfig().ID()},
 			sq.NotEq{"resource_config_scope_id": scope.ID()},
 		}).
-		RunWith(r.conn).
+		RunWith(tx).
 		Exec()
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := results.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected > 0 {
+		err = requestScheduleForJobsUsingResource(tx, r.id)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = tx.Commit()
 	if err != nil {
 		return err
 	}
