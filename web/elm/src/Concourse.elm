@@ -358,6 +358,9 @@ mapBuildPlan fn plan =
                 BuildStepPut _ ->
                     []
 
+                BuildStepCheck _ ->
+                    []
+
                 BuildStepGet _ _ ->
                     []
 
@@ -412,6 +415,7 @@ type BuildStep
     | BuildStepSetPipeline StepName
     | BuildStepLoadVar StepName
     | BuildStepArtifactInput StepName
+    | BuildStepCheck StepName
     | BuildStepGet StepName (Maybe Version)
     | BuildStepArtifactOutput StepName
     | BuildStepPut StepName
@@ -482,6 +486,8 @@ decodeBuildPlan_ =
                 -- buckle up
                 [ Json.Decode.field "task" <|
                     lazy (\_ -> decodeBuildStepTask)
+                , Json.Decode.field "check" <|
+                    lazy (\_ -> decodeBuildStepCheck)
                 , Json.Decode.field "get" <|
                     lazy (\_ -> decodeBuildStepGet)
                 , Json.Decode.field "artifact_input" <|
@@ -541,6 +547,12 @@ decodeBuildStepGet =
     Json.Decode.succeed BuildStepGet
         |> andMap (Json.Decode.field "name" Json.Decode.string)
         |> andMap (Json.Decode.maybe <| Json.Decode.field "version" decodeVersion)
+
+
+decodeBuildStepCheck : Json.Decode.Decoder BuildStep
+decodeBuildStepCheck =
+    Json.Decode.succeed BuildStepCheck
+        |> andMap (Json.Decode.field "name" Json.Decode.string)
 
 
 decodeBuildStepArtifactOutput : Json.Decode.Decoder BuildStep

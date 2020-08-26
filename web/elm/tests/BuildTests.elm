@@ -2782,6 +2782,23 @@ all =
                                 )
                             >> Tuple.first
 
+                    fetchPlanWithCheckStep : () -> Application.Model
+                    fetchPlanWithCheckStep =
+                        givenBuildStarted
+                            >> Tuple.first
+                            >> Application.handleCallback
+                                (Callback.PlanAndResourcesFetched 307 <|
+                                    Ok <|
+                                        ( { id = "plan"
+                                          , step =
+                                                Concourse.BuildStepCheck
+                                                    "step"
+                                          }
+                                        , { inputs = [], outputs = [] }
+                                        )
+                                )
+                            >> Tuple.first
+
                     fetchPlanWithSetPipelineStep : () -> Application.Model
                     fetchPlanWithSetPipelineStep =
                         givenBuildStarted
@@ -2996,6 +3013,10 @@ all =
                     fetchPlanWithTaskStep
                         >> Common.queryView
                         >> Query.has taskStepLabel
+                , test "check step shows check label" <|
+                    fetchPlanWithCheckStep
+                        >> Common.queryView
+                        >> Query.has checkStepLabel
                 , test "set_pipeline step shows set_pipeline label" <|
                     fetchPlanWithSetPipelineStep
                         >> Common.queryView
@@ -3895,6 +3916,14 @@ setPipelineStepLabel =
     , style "line-height" "28px"
     , style "padding-left" "6px"
     , containing [ text "set_pipeline:" ]
+    ]
+
+
+checkStepLabel =
+    [ style "color" Colors.pending
+    , style "line-height" "28px"
+    , style "padding-left" "6px"
+    , containing [ text "check:" ]
     ]
 
 
