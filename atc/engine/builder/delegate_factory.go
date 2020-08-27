@@ -479,7 +479,7 @@ func (d *checkDelegate) pipeline() (db.Pipeline, error) {
 }
 
 func (d *checkDelegate) resource() (db.Resource, bool, error) {
-	if d.plan.UpdateResource == "" {
+	if d.plan.Resource == "" {
 		return nil, false, nil
 	}
 
@@ -492,13 +492,13 @@ func (d *checkDelegate) resource() (db.Resource, bool, error) {
 		return nil, false, err
 	}
 
-	resource, found, err := pipeline.Resource(d.plan.UpdateResource)
+	resource, found, err := pipeline.Resource(d.plan.Resource)
 	if err != nil {
 		return nil, false, fmt.Errorf("get pipeline resource: %w", err)
 	}
 
 	if !found {
-		return nil, false, fmt.Errorf("resource '%s' deleted", d.plan.UpdateResource)
+		return nil, false, fmt.Errorf("resource '%s' deleted", d.plan.Resource)
 	}
 
 	d.cachedResource = resource
@@ -507,7 +507,7 @@ func (d *checkDelegate) resource() (db.Resource, bool, error) {
 }
 
 func (d *checkDelegate) resourceType() (db.ResourceType, bool, error) {
-	if d.plan.UpdateResourceType == "" {
+	if d.plan.ResourceType == "" {
 		return nil, false, nil
 	}
 
@@ -520,13 +520,13 @@ func (d *checkDelegate) resourceType() (db.ResourceType, bool, error) {
 		return nil, false, err
 	}
 
-	resourceType, found, err := pipeline.ResourceType(d.plan.UpdateResourceType)
+	resourceType, found, err := pipeline.ResourceType(d.plan.ResourceType)
 	if err != nil {
 		return nil, false, fmt.Errorf("get pipeline resource type: %w", err)
 	}
 
 	if !found {
-		return nil, false, fmt.Errorf("resource type '%s' deleted", d.plan.UpdateResourceType)
+		return nil, false, fmt.Errorf("resource type '%s' deleted", d.plan.ResourceType)
 	}
 
 	d.cachedResourceType = resourceType
