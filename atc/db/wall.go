@@ -23,7 +23,7 @@ type wall struct {
 
 func NewWall(conn Conn, clock Clock) Wall {
 	return &wall{
-		conn: conn,
+		conn:  conn,
 		clock: clock,
 	}
 }
