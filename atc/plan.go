@@ -281,8 +281,6 @@ type TaskPlan struct {
 	Vars Params `json:"vars,omitempty"`
 
 	// Params to set in the task's environment.
-	//
-	// XXX(check-refactor): can this be turned into TaskEnv?
 	Params Params `json:"params,omitempty"`
 
 	// Remap inputs and output artifacts from task names to other names in the
