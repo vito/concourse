@@ -44,11 +44,10 @@ type ContainerLimits struct {
 }
 
 type ImageResource struct {
-	Type   string `json:"type"`
-	Source Source `json:"source"`
-
-	Params  Params  `json:"params,omitempty"`
+	Type    string  `json:"type"`
+	Source  Source  `json:"source"`
 	Version Version `json:"version,omitempty"`
+	Params  Params  `json:"params,omitempty"`
 }
 
 func NewTaskConfig(configBytes []byte) (TaskConfig, error) {

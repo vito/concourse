@@ -12,6 +12,7 @@ import (
 	"github.com/concourse/concourse/atc"
 	"github.com/concourse/concourse/atc/compression"
 	"github.com/concourse/concourse/atc/db"
+	"github.com/concourse/concourse/atc/exec"
 	"github.com/concourse/concourse/atc/resource"
 	"github.com/concourse/concourse/atc/runtime"
 	"github.com/concourse/concourse/atc/worker"
@@ -326,10 +327,37 @@ func (i *imageResourceFetcher) getLatestVersion(
 		return nil, err
 	}
 
+	exec.NewCheckStep
+	cursorVersion := i.imageResource.Version
+	if cursorVersion == nil {
+		config, err := i.dbResourceConfigFactory.FindOrCreateResourceConfig(
+			i.imageResource.Type,
+			i.imageResource.Source,
+			i.customTypes,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		scope, err := config.FindOrCreateScope(nil)
+		if err != nil {
+			return nil, err
+		}
+
+		latestVersion, found, err := scope.LatestVersion()
+		if err != nil {
+			return nil, err
+		}
+
+		if found {
+			cursorVersion = atc.Version(latestVersion.Version())
+		}
+	}
+
 	processSpec := runtime.ProcessSpec{
 		Path: "/opt/resource/check",
 	}
-	checkingResource := i.resourceFactory.NewResource(i.imageResource.Source, nil, i.imageResource.Version)
+	checkingResource := i.resourceFactory.NewResource(i.imageResource.Source, nil, cursorVersion)
 	versions, err := checkingResource.Check(context.TODO(), processSpec, imageContainer)
 	if err != nil {
 		return nil, err
