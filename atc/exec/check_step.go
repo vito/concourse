@@ -28,7 +28,6 @@ type CheckStep struct {
 	strategy              worker.ContainerPlacementStrategy
 	pool                  worker.Pool
 	delegateFactory       CheckDelegateFactory
-	succeeded             bool
 	workerClient          worker.Client
 }
 
@@ -74,7 +73,7 @@ func NewCheckStep(
 	}
 }
 
-func (step *CheckStep) Run(ctx context.Context, state RunState) error {
+func (step *CheckStep) Run(ctx context.Context, state RunState) (bool, error) {
 	attrs := tracing.Attrs{
 		"name": step.plan.Name,
 	}
@@ -90,13 +89,13 @@ func (step *CheckStep) Run(ctx context.Context, state RunState) error {
 	delegate := step.delegateFactory.CheckDelegate(state)
 	ctx, span := delegate.StartSpan(ctx, "check", attrs)
 
-	err := step.run(ctx, state, delegate)
+	ok, err := step.run(ctx, state, delegate)
 	tracing.End(span, err)
 
-	return err
+	return ok, err
 }
 
-func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDelegate) error {
+func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDelegate) (bool, error) {
 	logger := lagerctx.FromContext(ctx)
 	logger = logger.Session("check-step", lager.Data{
 		"step-name": step.plan.Name,
@@ -106,22 +105,22 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 
 	timeout, err := time.ParseDuration(step.plan.Timeout)
 	if err != nil {
-		return fmt.Errorf("parse timeout: %w", err)
+		return false, fmt.Errorf("parse timeout: %w", err)
 	}
 
 	source, err := creds.NewSource(state, step.plan.Source).Evaluate()
 	if err != nil {
-		return fmt.Errorf("resource config creds evaluation: %w", err)
+		return false, fmt.Errorf("resource config creds evaluation: %w", err)
 	}
 
 	resourceTypes, err := creds.NewVersionedResourceTypes(state, step.plan.VersionedResourceTypes).Evaluate()
 	if err != nil {
-		return fmt.Errorf("resource types creds evaluation: %w", err)
+		return false, fmt.Errorf("resource types creds evaluation: %w", err)
 	}
 
 	resourceConfig, err := step.resourceConfigFactory.FindOrCreateResourceConfig(step.plan.Type, source, resourceTypes)
 	if err != nil {
-		return fmt.Errorf("create resource config: %w", err)
+		return false, fmt.Errorf("create resource config: %w", err)
 	}
 
 	// XXX(check-refactor): we should remove scopes as soon as it's safe to do
@@ -131,12 +130,12 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 	// shared history problem)
 	scope, err := delegate.FindOrCreateScope(resourceConfig)
 	if err != nil {
-		return fmt.Errorf("create resource config scope: %w", err)
+		return false, fmt.Errorf("create resource config scope: %w", err)
 	}
 
 	lock, run, err := delegate.WaitToRun(ctx, scope)
 	if err != nil {
-		return fmt.Errorf("wait: %w", err)
+		return false, fmt.Errorf("wait: %w", err)
 	}
 
 	if run {
@@ -151,7 +150,7 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 		if fromVersion == nil {
 			latestVersion, found, err := scope.LatestVersion()
 			if err != nil {
-				return fmt.Errorf("get latest version: %w", err)
+				return false, fmt.Errorf("get latest version: %w", err)
 			}
 
 			if found {
@@ -163,7 +162,7 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 
 		_, err = scope.UpdateLastCheckStartTime()
 		if err != nil {
-			return fmt.Errorf("update check end time: %w", err)
+			return false, fmt.Errorf("update check end time: %w", err)
 		}
 
 		result, err := step.runCheck(ctx, logger, delegate, timeout, resourceConfig, source, resourceTypes, fromVersion)
@@ -174,44 +173,38 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 			metric.Metrics.ChecksFinishedWithError.Inc()
 
 			if pointErr := delegate.PointToCheckedConfig(scope); pointErr != nil {
-				return fmt.Errorf("update resource config scope: %w", pointErr)
+				return false, fmt.Errorf("update resource config scope: %w", pointErr)
 			}
 
 			if _, ok := err.(runtime.ErrResourceScriptFailed); ok {
 				delegate.Finished(logger, false)
-				return nil
+				return false, nil
 			}
 
-			return fmt.Errorf("run check: %w", err)
+			return false, fmt.Errorf("run check: %w", err)
 		}
 
 		metric.Metrics.ChecksFinishedWithSuccess.Inc()
 
 		err = scope.SaveVersions(db.NewSpanContext(ctx), result.Versions)
 		if err != nil {
-			return fmt.Errorf("save versions: %w", err)
+			return false, fmt.Errorf("save versions: %w", err)
 		}
 
 		_, err = scope.UpdateLastCheckEndTime()
 		if err != nil {
-			return fmt.Errorf("update check end time: %w", err)
+			return false, fmt.Errorf("update check end time: %w", err)
 		}
 	}
 
 	err = delegate.PointToCheckedConfig(scope)
 	if err != nil {
-		return fmt.Errorf("update resource config scope: %w", err)
+		return false, fmt.Errorf("update resource config scope: %w", err)
 	}
 
-	step.succeeded = true
+	delegate.Finished(logger, true)
 
-	delegate.Finished(logger, step.succeeded)
-
-	return nil
-}
-
-func (step *CheckStep) Succeeded() bool {
-	return step.succeeded
+	return true, nil
 }
 
 func (step *CheckStep) runCheck(
