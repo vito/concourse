@@ -97,6 +97,7 @@ jobs:
 		fakeSource         *buildfakes.FakeRegisterableArtifact
 
 		spStep  exec.Step
+		stepOk  bool
 		stepErr error
 
 		stepMetadata = exec.StepMetadata{
@@ -196,7 +197,7 @@ jobs:
 			fakeWorkerClient,
 		)
 
-		stepErr = spStep.Run(ctx, state)
+		stepOk, stepErr = spStep.Run(ctx, state)
 	})
 
 	Context("when file is not configured", func() {
@@ -348,7 +349,7 @@ jobs:
 						})
 						It("does not fail the step", func() {
 							Expect(stepErr).ToNot(HaveOccurred())
-							Expect(spStep.Succeeded()).To(BeTrue())
+							Expect(stepOk).To(BeTrue())
 						})
 					})
 				})
