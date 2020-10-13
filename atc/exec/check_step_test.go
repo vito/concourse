@@ -242,6 +242,31 @@ var _ = Describe("CheckStep", func() {
 			It("succeeds", func() {
 				Expect(stepOk).To(BeTrue())
 			})
+
+			Context("when there is a latest version", func() {
+				BeforeEach(func() {
+					fakeVersion := new(dbfakes.FakeResourceConfigVersion)
+					fakeVersion.VersionReturns(db.Version{"some": "latest-version"})
+					fakeResourceConfigScope.LatestVersionReturns(fakeVersion, true, nil)
+				})
+
+				It("stores the latest version as the step result", func() {
+					Expect(fakeRunState.StoreResultCallCount()).To(Equal(1))
+					id, val := fakeRunState.StoreResultArgsForCall(0)
+					Expect(id).To(Equal(atc.PlanID("some-plan-id")))
+					Expect(val).To(Equal(atc.Version{"some": "latest-version"}))
+				})
+			})
+
+			Context("when there is no version", func() {
+				BeforeEach(func() {
+					fakeResourceConfigScope.LatestVersionReturns(nil, false, nil)
+				})
+
+				It("does not store a version", func() {
+					Expect(fakeRunState.StoreResultCallCount()).To(Equal(0))
+				})
+			})
 		})
 
 		Context("running", func() {
@@ -489,6 +514,13 @@ var _ = Describe("CheckStep", func() {
 					}))
 				})
 
+				It("stores the latest version as the step result", func() {
+					Expect(fakeRunState.StoreResultCallCount()).To(Equal(1))
+					id, val := fakeRunState.StoreResultArgsForCall(0)
+					Expect(id).To(Equal(atc.PlanID("some-plan-id")))
+					Expect(val).To(Equal(atc.Version{"version": "2"}))
+				})
+
 				It("sets the check error to nil", func() {
 					Expect(fakeResourceConfigScope.SetCheckErrorCallCount()).To(Equal(1))
 					err := fakeResourceConfigScope.SetCheckErrorArgsForCall(0)
@@ -499,6 +531,21 @@ var _ = Describe("CheckStep", func() {
 					Expect(fakeDelegate.FinishedCallCount()).To(Equal(1))
 					_, succeeded := fakeDelegate.FinishedArgsForCall(0)
 					Expect(succeeded).To(BeTrue())
+				})
+
+				Context("when no versions are returned", func() {
+					BeforeEach(func() {
+						fakeClient.RunCheckStepReturns(worker.CheckResult{Versions: []atc.Version{}}, nil)
+					})
+
+					It("succeeds", func() {
+						Expect(stepErr).ToNot(HaveOccurred())
+						Expect(stepOk).To(BeTrue())
+					})
+
+					It("does not store a version", func() {
+						Expect(fakeRunState.StoreResultCallCount()).To(Equal(0))
+					})
 				})
 
 				Context("before running the check", func() {
