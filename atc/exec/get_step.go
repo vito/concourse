@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/lager/lagerctx"
@@ -45,8 +46,7 @@ type GetDelegateFactory interface {
 type GetDelegate interface {
 	StartSpan(context.Context, string, tracing.Attrs) (context.Context, trace.Span)
 
-	ImageVersionDetermined(db.UsedResourceCache) error
-	RedactImageSource(source atc.Source) (atc.Source, error)
+	FetchImage(context.Context, RunState, atc.ImageResource) (runtime.Artifact, error)
 
 	Stdout() io.Writer
 	Stderr() io.Writer
@@ -129,35 +129,53 @@ func (step *GetStep) run(ctx context.Context, state RunState, delegate GetDelega
 		return false, err
 	}
 
-	resourceTypes, err := creds.NewVersionedResourceTypes(state, step.plan.VersionedResourceTypes).Evaluate()
-	if err != nil {
-		return false, err
-	}
-
 	version, err := NewVersionSourceFromPlan(&step.plan).Version(state)
 	if err != nil {
 		return false, err
 	}
 
-	containerSpec := worker.ContainerSpec{
-		ImageSpec: worker.ImageSpec{
-			ResourceType: step.plan.Type,
-		},
+	workerSpec := worker.WorkerSpec{
+		Tags:   step.plan.Tags,
 		TeamID: step.metadata.TeamID,
-		Env:    step.metadata.Env(),
+	}
+
+	var imageSpec worker.ImageSpec
+	resourceType, found := step.plan.VersionedResourceTypes.Lookup(step.plan.Type)
+	if found {
+		artifact, err := delegate.FetchImage(ctx, state, atc.ImageResource{
+			Type:                   resourceType.Type,
+			Source:                 resourceType.Source,
+			Version:                resourceType.Version,
+			VersionedResourceTypes: step.plan.VersionedResourceTypes,
+		})
+		if err != nil {
+			return false, fmt.Errorf("fetch image: %w", err)
+		}
+
+		imageSpec = worker.ImageSpec{
+			ImageArtifact: artifact,
+		}
+	} else {
+		imageSpec = worker.ImageSpec{
+			ResourceType: step.plan.Type,
+		}
+
+		workerSpec.ResourceType = step.plan.Type
+	}
+
+	log.Println("!!!!!!!!!!!!! IMAGE SPEC:", imageSpec)
+
+	containerSpec := worker.ContainerSpec{
+		ImageSpec: imageSpec,
+		TeamID:    step.metadata.TeamID,
+		Env:       step.metadata.Env(),
 	}
 	tracing.Inject(ctx, &containerSpec)
 
-	workerSpec := worker.WorkerSpec{
-		ResourceType:  step.plan.Type,
-		Tags:          step.plan.Tags,
-		TeamID:        step.metadata.TeamID,
-		ResourceTypes: resourceTypes,
-	}
-
-	imageSpec := worker.ImageFetcherSpec{
-		ResourceTypes: resourceTypes,
-		Delegate:      delegate,
+	// XXX(substeps): would be cool to build this off of the fetched image resource cache
+	resourceTypes, err := creds.NewVersionedResourceTypes(state, step.plan.VersionedResourceTypes).Evaluate()
+	if err != nil {
+		return false, err
 	}
 
 	resourceCache, err := step.resourceCacheFactory.FindOrCreateResourceCache(
@@ -196,7 +214,9 @@ func (step *GetStep) run(ctx context.Context, state RunState, delegate GetDelega
 		workerSpec,
 		step.strategy,
 		step.containerMetadata,
-		imageSpec,
+		worker.ImageFetcherSpec{
+			Delegate: worker.NoopImageFetchingDelegate{},
+		},
 		processSpec,
 		delegate,
 		resourceCache,

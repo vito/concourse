@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -470,6 +471,9 @@ func (worker *gardenWorker) fetchImageForContainer(
 	}
 
 	logger.Debug("fetching-image")
+
+	log.Printf("IMAGE: %#v %#v\n", spec, image)
+
 	return image.FetchForContainer(ctx, logger, creatingContainer)
 }
 

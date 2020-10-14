@@ -3,6 +3,7 @@ package exec
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"code.cloudfoundry.org/lager"
@@ -172,7 +173,7 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 			return false, fmt.Errorf("update check end time: %w", err)
 		}
 
-		result, err := step.runCheck(ctx, logger, delegate, timeout, resourceConfig, source, resourceTypes, fromVersion)
+		result, err := step.runCheck(ctx, logger, state, delegate, timeout, resourceConfig, source, resourceTypes, fromVersion)
 		if setErr := scope.SetCheckError(err); setErr != nil {
 			logger.Error("failed-to-set-check-error", setErr)
 		}
@@ -230,6 +231,7 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 func (step *CheckStep) runCheck(
 	ctx context.Context,
 	logger lager.Logger,
+	state RunState,
 	delegate CheckDelegate,
 	timeout time.Duration,
 	resourceConfig db.ResourceConfig,
@@ -237,25 +239,46 @@ func (step *CheckStep) runCheck(
 	resourceTypes atc.VersionedResourceTypes,
 	fromVersion atc.Version,
 ) (worker.CheckResult, error) {
-	containerSpec := worker.ContainerSpec{
-		ImageSpec: worker.ImageSpec{
+	workerSpec := worker.WorkerSpec{
+		Tags:   step.plan.Tags,
+		TeamID: step.metadata.TeamID,
+	}
+
+	var imageSpec worker.ImageSpec
+	resourceType, found := step.plan.VersionedResourceTypes.Lookup(step.plan.Type)
+	if found {
+		artifact, err := delegate.FetchImage(ctx, state, atc.ImageResource{
+			Type:                   resourceType.Type,
+			Source:                 resourceType.Source,
+			Version:                resourceType.Version,
+			VersionedResourceTypes: step.plan.VersionedResourceTypes,
+		})
+		if err != nil {
+			return worker.CheckResult{}, fmt.Errorf("fetch image: %w", err)
+		}
+
+		imageSpec = worker.ImageSpec{
+			ImageArtifact: artifact,
+		}
+	} else {
+		imageSpec = worker.ImageSpec{
 			ResourceType: step.plan.Type,
-		},
+		}
+
+		workerSpec.ResourceType = step.plan.Type
+	}
+
+	log.Println("!!!!!!!!!!!!! IMAGE SPEC:", imageSpec)
+
+	containerSpec := worker.ContainerSpec{
+		ImageSpec: imageSpec,
 		BindMounts: []worker.BindMountSource{
 			&worker.CertsVolumeMount{Logger: logger},
 		},
-		Tags:   step.plan.Tags,
 		TeamID: step.metadata.TeamID,
 		Env:    step.metadata.Env(),
 	}
 	tracing.Inject(ctx, &containerSpec)
-
-	workerSpec := worker.WorkerSpec{
-		ResourceType:  step.plan.Type,
-		Tags:          step.plan.Tags,
-		ResourceTypes: resourceTypes,
-		TeamID:        step.metadata.TeamID,
-	}
 
 	expires := db.ContainerOwnerExpiries{
 		Min: 5 * time.Minute,
@@ -277,11 +300,6 @@ func (step *CheckStep) runCheck(
 		fromVersion,
 	)
 
-	imageSpec := worker.ImageFetcherSpec{
-		ResourceTypes: resourceTypes,
-		Delegate:      delegate,
-	}
-
 	processSpec := runtime.ProcessSpec{
 		Path:         "/opt/resource/check",
 		StdoutWriter: delegate.Stdout(),
@@ -297,7 +315,9 @@ func (step *CheckStep) runCheck(
 		step.strategy,
 
 		step.containerMetadata,
-		imageSpec,
+		worker.ImageFetcherSpec{
+			Delegate: worker.NoopImageFetchingDelegate{},
+		},
 
 		processSpec,
 		delegate,
