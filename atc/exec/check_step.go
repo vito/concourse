@@ -29,6 +29,7 @@ type CheckStep struct {
 	pool                  worker.Pool
 	delegateFactory       CheckDelegateFactory
 	workerClient          worker.Client
+	defaultCheckTimeout   time.Duration
 }
 
 //go:generate counterfeiter . CheckDelegateFactory
@@ -58,6 +59,7 @@ func NewCheckStep(
 	pool worker.Pool,
 	delegateFactory CheckDelegateFactory,
 	client worker.Client,
+	defaultCheckTimeout time.Duration,
 ) Step {
 	return &CheckStep{
 		planID:                planID,
@@ -70,6 +72,7 @@ func NewCheckStep(
 		strategy:              strategy,
 		delegateFactory:       delegateFactory,
 		workerClient:          client,
+		defaultCheckTimeout:   defaultCheckTimeout,
 	}
 }
 
@@ -103,9 +106,13 @@ func (step *CheckStep) run(ctx context.Context, state RunState, delegate CheckDe
 
 	delegate.Initializing(logger)
 
-	timeout, err := time.ParseDuration(step.plan.Timeout)
-	if err != nil {
-		return false, fmt.Errorf("parse timeout: %w", err)
+	timeout := step.defaultCheckTimeout
+	if step.plan.Timeout != "" {
+		var err error
+		timeout, err = time.ParseDuration(step.plan.Timeout)
+		if err != nil {
+			return false, fmt.Errorf("parse timeout: %w", err)
+		}
 	}
 
 	source, err := creds.NewSource(state, step.plan.Source).Evaluate()
